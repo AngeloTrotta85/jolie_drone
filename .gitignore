@@ -1,32 +1,9 @@
-# Prerequisites
+*_m.h
+*_m.cc
+*_m.d
+*_m.o
 *.d
-
-# Compiled Object files
-*.slo
-*.lo
 *.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+src/jolie_drone_dbg
+src/jolie_drone
+out/*

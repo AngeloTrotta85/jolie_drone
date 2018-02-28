@@ -6,4 +6,6 @@
 *.o
 src/jolie_drone_dbg
 src/jolie_drone
+src/Makefile
 out/*
+out/

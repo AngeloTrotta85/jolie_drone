@@ -19,9 +19,10 @@
 #ifndef __INET_UDPBASICAPPJOLIE_H
 #define __INET_UDPBASICAPPJOLIE_H
 
-#include <vector>
-
 #include <inet/common/INETDefs.h>
+
+#include <coap.h>
+#include <vector>
 
 #include <inet/applications/base/ApplicationPacket_m.h>
 #include <inet/applications/base/ApplicationBase.h>
@@ -49,6 +50,11 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     UdpSocket socket;
     cMessage *selfMsg = nullptr;
 
+    //CoAP
+    cMessage *coapServer_selfMsg = nullptr;
+    double coapServer_loopTimer;
+    coap_context_t*  ctx;
+
     // statistics
     int numSent = 0;
     int numReceived = 0;
@@ -73,6 +79,9 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
     virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
     virtual void handleNodeCrash() override;
+
+    virtual void serverCoAP_mainLoop(void);
+    virtual void serverCoAP_init(void);
 
   public:
     UdpBasicAppJolie() {}

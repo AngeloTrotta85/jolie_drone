@@ -18,6 +18,9 @@
 
 
 #include "UdpBasicAppJolie.h"
+
+#include <arpa/inet.h>
+
 #include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/Packet.h"
@@ -39,6 +42,8 @@ void UdpBasicAppJolie::initialize(int stage)
 {
     ApplicationBase::initialize(stage);
 
+    std::cout << "UdpBasicAppJolie::initialize BEGIN - Stage " << stage << std::flush << endl;
+
     if (stage == INITSTAGE_LOCAL) {
         numSent = 0;
         numReceived = 0;
@@ -53,6 +58,9 @@ void UdpBasicAppJolie::initialize(int stage)
 
         coapServer_loopTimer = 0.1;
 
+        myAppAddr = this->getParentModule()->getIndex();
+        myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
+
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
@@ -61,8 +69,12 @@ void UdpBasicAppJolie::initialize(int stage)
         scheduleAt(simTime() + coapServer_loopTimer, coapServer_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
+        addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
+
         serverCoAP_init();
     }
+
+    std::cout << "UdpBasicAppJolie::initialize END - Stage " << stage << std::flush << endl;
 }
 
 void UdpBasicAppJolie::finish()
@@ -148,6 +160,27 @@ void UdpBasicAppJolie::processStart()
         destAddresses.push_back(result);
     }
 
+    IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
+    if (ift) {
+        for (int i = 0; i < (int)addressTable.size(); i++) {
+
+            char buf[32];
+            //snprintf(buf, sizeof(buf), "UDPBurstML.host[%d]", i);
+            snprintf(buf, sizeof(buf), "%s.host[%d]",this->getParentModule()->getParentModule()->getName(), i);
+            //EV << "Looking for " << buf << endl;
+            L3Address addr = L3AddressResolver().resolve(buf);
+            addressTable[i] = addr.toIpv4();
+        }
+
+        if (myIPAddr == Ipv4Address::UNSPECIFIED_ADDRESS) {
+            InterfaceEntry *wlan = ift->getInterfaceByName("wlan0");
+            if (wlan) {
+                myIPAddr = wlan->getIpv4Address();
+                addressTable[myAppAddr] = myIPAddr;
+            }
+        }
+    }
+
     if (!destAddresses.empty()) {
         selfMsg->setKind(SEND);
         processSend();
@@ -158,6 +191,8 @@ void UdpBasicAppJolie::processStart()
             scheduleAt(stopTime, selfMsg);
         }
     }
+
+    registerUAVs_CoAP_init();
 }
 
 void UdpBasicAppJolie::processSend()
@@ -257,7 +292,7 @@ void UdpBasicAppJolie::handleNodeCrash()
 }
 
 static void
-hello_handler(coap_context_t *ctx, struct coap_resource_t *resource,
+policy_handler(coap_context_t *ctx, struct coap_resource_t *resource,
               const coap_endpoint_t *local_interface, coap_address_t *peer,
               coap_pdu_t *request, str *token, coap_pdu_t *response)
 {
@@ -266,12 +301,28 @@ hello_handler(coap_context_t *ctx, struct coap_resource_t *resource,
     response->hdr->code           = COAP_RESPONSE_CODE(205);
     coap_add_option(response, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
     coap_add_data  (response, strlen(response_data), (unsigned char *)response_data);
+
+    std::cout << "Received a GET for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
+
+    unsigned char* data;
+    size_t         data_len;
+    //if (COAP_RESPONSE_CLASS(request->hdr->code) == 2)
+    {
+        if (coap_get_data(request, &data_len, &data))
+        {
+            //printf("Received: %s\n", data);
+            std::cout << "Received |" << data << "| from a client" << endl;
+        }
+    }
 }
 
-void UdpBasicAppJolie::serverCoAP_init(void) {
+void UdpBasicAppJolie::serverCoAP_thread(void) {
 
     coap_address_t   serv_addr;
-    coap_resource_t* hello_resource;
+    coap_resource_t* policy_resource;
+    fd_set           readfds;
+
+    std::cout << "UdpBasicAppJolie::serverCoAP_thread BEGIN" << std::flush << endl;
 
     /* Prepare the CoAP server socket */
     coap_address_init(&serv_addr);
@@ -282,25 +333,119 @@ void UdpBasicAppJolie::serverCoAP_init(void) {
     if (!ctx) exit(EXIT_FAILURE);
 
     /* Initialize the hello resource */
-    hello_resource = coap_resource_init((unsigned char *)"hello", 5, 0);
-    coap_register_handler(hello_resource, COAP_REQUEST_GET, hello_handler);
-    coap_add_resource(ctx, hello_resource);
+    policy_resource = coap_resource_init((unsigned char *)"policy", 6, 0);
+    coap_register_handler(policy_resource, COAP_REQUEST_GET, policy_handler);
+    coap_add_resource(ctx, policy_resource);
+
+    /*Listen for incoming connections*/
+    while (1) {
+        FD_ZERO(&readfds);
+        FD_SET( ctx->sockfd, &readfds );
+        int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
+        if ( result < 0 ) /* socket error */
+        {
+            exit(EXIT_FAILURE);
+        }
+        else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) /* socket read*/
+        {
+            coap_read( ctx );
+        }
+    }
+
+    std::cout << "UdpBasicAppJolie::serverCoAP_thread END" << std::flush << endl;
+}
+
+void UdpBasicAppJolie::serverCoAP_init(void) {
+
+    //std::thread first (std::bind(&UdpBasicAppJolie::serverCoAP_thread, this));     // spawn new thread that calls foo()
+    //std::thread first (serverCoAP_thread_test);     // spawn new thread that calls foo()
+
+    t_coap = std::thread (std::bind(&UdpBasicAppJolie::serverCoAP_thread, this));
+
 }
 
 void UdpBasicAppJolie::serverCoAP_mainLoop(void) {
-    fd_set           readfds;
 
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    /*if ( result < 0 ) // socket error
+}
+
+static void
+message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interface,
+        const coap_address_t *remote, coap_pdu_t *sent, coap_pdu_t *received,
+        const coap_tid_t id)
+{
+    unsigned char* data;
+    size_t         data_len;
+    if (COAP_RESPONSE_CLASS(received->hdr->code) == 2)
     {
-        exit(EXIT_FAILURE);
+        if (coap_get_data(received, &data_len, &data))
+        {
+            //printf("Received: %s\n", data);
+            std::cout << "Received |" << data << "| after CoAP Drone registration" << endl;
+        }
     }
-    else */if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) /* socket read*/
-    {
-        coap_read( ctx );
+}
+
+void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
+    char buff[32];
+    unsigned int i = 0;
+    int buffStrLen;
+
+    std::cout << "UdpBasicAppJolie::registerUAVs_CoAP_init BEGIN" << std::flush << endl;
+
+    for (auto& a : addressTable) {
+        std::cout << "Sending CoAP registration for Drone: " << i << " having local IP: " << a << endl;
+        memset (buff, 0, sizeof(buff));
+        buffStrLen = snprintf(buff, sizeof(buff), "Drone%d", i);
+
+        coap_context_t*   ctx;
+        coap_address_t    dst_addr, src_addr;
+        static coap_uri_t uri;
+        fd_set            readfds;
+        coap_pdu_t*       request;
+        const char*       server_uri = "coap://127.0.0.1/register";
+        unsigned char     get_method = 1;
+
+        /* Prepare coap socket*/
+        coap_address_init(&src_addr);
+        src_addr.addr.sin.sin_family      = AF_INET;
+        src_addr.addr.sin.sin_port        = htons(0);
+        src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
+        ctx = coap_new_context(&src_addr);
+
+        /* The destination endpoint */
+        coap_address_init(&dst_addr);
+        dst_addr.addr.sin.sin_family      = AF_INET;
+        dst_addr.addr.sin.sin_port        = htons(5683);
+        dst_addr.addr.sin.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+        /* Prepare the request */
+        coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
+        request            = coap_new_pdu();
+        request->hdr->type = COAP_MESSAGE_CON;
+        request->hdr->id   = coap_new_message_id(ctx);
+        request->hdr->code = get_method;
+        coap_add_data  (request, buffStrLen, (unsigned char *)buff);
+        coap_add_option(request, COAP_OPTION_URI_PATH, uri.path.length, uri.path.s);
+
+        /* Set the handler and send the request */
+        coap_register_response_handler(ctx, message_handler);
+        coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
+        FD_ZERO(&readfds);
+        FD_SET( ctx->sockfd, &readfds );
+        int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
+        if ( result < 0 ) /* socket error */
+        {
+            exit(EXIT_FAILURE);
+        }
+        else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) /* socket read*/
+        {
+            coap_read( ctx );
+        }
+
+        ++i;
     }
+
+    std::cout << "UdpBasicAppJolie::registerUAVs_CoAP_init END" << std::flush << endl;
 }
 
 } // namespace inet

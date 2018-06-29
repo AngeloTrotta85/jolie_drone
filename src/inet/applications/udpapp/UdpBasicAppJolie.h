@@ -23,6 +23,7 @@
 
 #include <coap.h>
 #include <vector>
+#include <thread>         // std::thread
 
 #include <inet/applications/base/ApplicationPacket_m.h>
 #include <inet/applications/base/ApplicationBase.h>
@@ -50,10 +51,15 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     UdpSocket socket;
     cMessage *selfMsg = nullptr;
 
+    int myAppAddr;
+    Ipv4Address myIPAddr;
+    std::vector<Ipv4Address> addressTable;
+
     //CoAP
     cMessage *coapServer_selfMsg = nullptr;
     double coapServer_loopTimer;
     coap_context_t*  ctx;
+    std::thread t_coap;
 
     // statistics
     int numSent = 0;
@@ -80,8 +86,10 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
     virtual void handleNodeCrash() override;
 
+    void serverCoAP_thread(void);
     virtual void serverCoAP_mainLoop(void);
     virtual void serverCoAP_init(void);
+    virtual void registerUAVs_CoAP_init(void);
 
   public:
     UdpBasicAppJolie() {}

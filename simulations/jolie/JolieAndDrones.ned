@@ -40,7 +40,7 @@ network JolieAndDrones
             parameters:
                 @display("p=100,250");
         }
-        drone[numDrones]: AdhocHost {
+        host[numDrones]: AdhocHost {
             parameters:
                 @display("r=,,#707070;p=250,58");
         }

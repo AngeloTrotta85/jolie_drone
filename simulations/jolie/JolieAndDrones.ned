@@ -46,6 +46,6 @@ network JolieAndDrones
         }
         gateway: AdhocHost {
             parameters:
-                @display("r=,,#707070;p=150,58");
+                @display("p=150,58;i=device/accesspoint");
         }
 }

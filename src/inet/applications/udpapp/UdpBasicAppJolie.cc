@@ -304,7 +304,7 @@ void UdpBasicAppJolie::handleNodeCrash()
 }
 
 static void
-policy_handler(coap_context_t *ctx, struct coap_resource_t *resource,
+policy_get_handler(coap_context_t *ctx, struct coap_resource_t *resource,
               const coap_endpoint_t *local_interface, coap_address_t *peer,
               coap_pdu_t *request, str *token, coap_pdu_t *response)
 {
@@ -315,6 +315,31 @@ policy_handler(coap_context_t *ctx, struct coap_resource_t *resource,
     coap_add_data  (response, strlen(response_data), (unsigned char *)response_data);
 
     std::cout << "Received a GET for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
+
+    unsigned char* data;
+    size_t         data_len;
+    //if (COAP_RESPONSE_CLASS(request->hdr->code) == 2)
+    {
+        if (coap_get_data(request, &data_len, &data))
+        {
+            //printf("Received: %s\n", data);
+            std::cout << "Received |" << data << "| from a client" << endl;
+        }
+    }
+}
+
+static void
+policy_post_handler(coap_context_t *ctx, struct coap_resource_t *resource,
+              const coap_endpoint_t *local_interface, coap_address_t *peer,
+              coap_pdu_t *request, str *token, coap_pdu_t *response)
+{
+    unsigned char buf[3];
+    const char* response_data     = "Hello World!";
+    response->hdr->code           = COAP_RESPONSE_CODE(205);
+    coap_add_option(response, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
+    coap_add_data  (response, strlen(response_data), (unsigned char *)response_data);
+
+    std::cout << "Received a POST for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
 
     unsigned char* data;
     size_t         data_len;
@@ -346,7 +371,8 @@ void UdpBasicAppJolie::serverCoAP_thread(void) {
 
     /* Initialize the hello resource */
     policy_resource = coap_resource_init((unsigned char *)"policy", 6, 0);
-    coap_register_handler(policy_resource, COAP_REQUEST_GET, policy_handler);
+    coap_register_handler(policy_resource, COAP_REQUEST_GET, policy_get_handler);
+    coap_register_handler(policy_resource, COAP_REQUEST_POST, policy_post_handler);
     coap_add_resource(ctx, policy_resource);
 
     /*Listen for incoming connections*/
@@ -385,6 +411,7 @@ message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interfa
         const coap_address_t *remote, coap_pdu_t *sent, coap_pdu_t *received,
         const coap_tid_t id)
 {
+    unsigned char buff[128];
     unsigned char* data;
     size_t         data_len;
     if (COAP_RESPONSE_CLASS(received->hdr->code) == 2)
@@ -392,13 +419,17 @@ message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interfa
         if (coap_get_data(received, &data_len, &data))
         {
             //printf("Received: %s\n", data);
-            std::cout << "Received |" << data << "| after CoAP Drone registration" << endl;
+            memcpy(buff, data, data_len);
+            buff[data_len] = 0;
+            //std::cout << "Received |" << data << "| of length: " << data_len << " after CoAP Drone registration" << endl;
+            std::cout << "Received |" << buff << "| after CoAP Drone registration" << endl;
         }
     }
 }
 
 void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
     char buff[32];
+    unsigned char buf[3];
     unsigned int i = 0;
     int buffStrLen;
 
@@ -414,8 +445,9 @@ void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
         static coap_uri_t uri;
         fd_set            readfds;
         coap_pdu_t*       request;
-        const char*       server_uri = "coap://127.0.0.1/register";
+        const char*       server_uri = "coap://192.168.1.177/register";
         unsigned char     get_method = 1;
+        unsigned char     post_method = 2;
 
         /* Prepare coap socket*/
         coap_address_init(&src_addr);
@@ -428,16 +460,19 @@ void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
         coap_address_init(&dst_addr);
         dst_addr.addr.sin.sin_family      = AF_INET;
         dst_addr.addr.sin.sin_port        = htons(5683);
-        dst_addr.addr.sin.sin_addr.s_addr = inet_addr("127.0.0.1");
+        dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
 
         /* Prepare the request */
         coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
         request            = coap_new_pdu();
         request->hdr->type = COAP_MESSAGE_CON;
         request->hdr->id   = coap_new_message_id(ctx);
-        request->hdr->code = get_method;
-        coap_add_data  (request, buffStrLen, (unsigned char *)buff);
+        request->hdr->code = post_method;
         coap_add_option(request, COAP_OPTION_URI_PATH, uri.path.length, uri.path.s);
+        coap_add_option(request, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
+        coap_add_data  (request, buffStrLen, (unsigned char *)buff);
+
+        std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
         /* Set the handler and send the request */
         coap_register_response_handler(ctx, message_handler);

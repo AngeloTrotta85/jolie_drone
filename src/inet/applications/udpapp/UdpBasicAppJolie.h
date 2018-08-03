@@ -38,6 +38,10 @@
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
+#include "../base/ApplicationBeacon_m.h"
+
+#include "inet/mobility/single/VirtualSpringMobility.h"
+
 #define P_COVER 1
 #define P_STOP 2
 #define P_FOCUS 3
@@ -57,6 +61,11 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
 {
 public:
 
+    typedef struct {
+        simtime_t timestamp_lastSeen;
+        node_info_msg_t info;
+    } neigh_info_t;
+
     typedef struct policy {
         int p_id;
         char p_name[32];
@@ -73,8 +82,7 @@ public:
                 << "drone ID: " << pol.drone_id << "; "
                 << "distance: " << pol.distance << "; "
                 << "position: " << pol.position << "; "
-                << "stiffness: " << pol.stiffness
-                << endl;
+                << "stiffness: " << pol.stiffness;
     }
 
 protected:
@@ -117,6 +125,11 @@ protected:
     int numSent = 0;
     int numReceived = 0;
 
+    //internal variables
+    IMobility *mob;
+
+    std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
+
 public:
     //thread variables
     static std::list<policy> policy_queue;
@@ -144,6 +157,9 @@ protected:
     virtual void handleNodeCrash() override;
 
     void serverCoAP_thread(void);
+
+    virtual void manageReceivedBeacon(Packet *msg);
+    virtual Packet *createBeaconPacket();
 
     virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);

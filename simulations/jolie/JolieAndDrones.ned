@@ -19,7 +19,8 @@
 package jolie_drone.simulations.jolie;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.inet.AdhocHost;
+//import inet.node.inet.AdhocHost;
+import inet.node.aodv.AodvRouter;
 import inet.physicallayer.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 import inet.visualizer.contract.IIntegratedVisualizer;
 
@@ -40,12 +41,12 @@ network JolieAndDrones
             parameters:
                 @display("p=100,250");
         }
-        host[numDrones]: AdhocHost {
-            parameters:
-                @display("r=,,#707070;p=250,58");
-        }
-        gateway: AdhocHost {
+        gateway: AodvRouter {
             parameters:
                 @display("p=150,58;i=device/accesspoint");
+        }
+        host[numDrones]: AodvRouter {
+            parameters:
+                @display("r=,,#707070;p=250,58");
         }
 }

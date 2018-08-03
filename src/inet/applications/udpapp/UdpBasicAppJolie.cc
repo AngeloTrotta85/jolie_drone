@@ -73,6 +73,9 @@ void UdpBasicAppJolie::initialize(int stage)
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
 
+
+        mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
+
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
@@ -142,18 +145,58 @@ L3Address UdpBasicAppJolie::chooseDestAddr()
     return destAddresses[k];
 }
 
+Packet *UdpBasicAppJolie::createBeaconPacket() {
+
+    char msgName[64];
+    node_info_msg_t mineInfo;
+    sprintf(msgName, "UDPBasicAppBeacon-%d-%d", myAppAddr, numSent);
+
+    long msgByteLength = (sizeof(struct node_info_msg_t)) + sizeof(uint32_t);
+    Packet *pk = new Packet(msgName);
+    const auto& payload = makeShared<ApplicationBeacon>();
+    payload->setChunkLength(B(msgByteLength));
+    payload->setSequenceNumber(numSent);
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    mineInfo.mob_position = mob->getCurrentPosition();
+    mineInfo.mob_velocity = mob->getCurrentVelocity();
+
+    mineInfo.src_appAddr = myAppAddr;
+    mineInfo.src_ipAddr = myIPAddr;
+
+    payload->setSrc_info(mineInfo);
+
+    pk->insertAtBack(payload);
+    pk->addPar("sourceId") = getId();
+    pk->addPar("msgId") = numSent;
+
+    return pk;
+}
+
 void UdpBasicAppJolie::sendPacket()
 {
-    std::ostringstream str;
+    Packet *packet;
+
+    //std::cout << "(" << myIPAddr << ") sendPacket() BEGIN " << endl << std::flush;
+
+    packet = createBeaconPacket();
+
+    /*std::ostringstream str;
     str << packetName << "-" << numSent;
+
     Packet *packet = new Packet(str.str().c_str());
     const auto& payload = makeShared<ApplicationPacket>();
     payload->setChunkLength(B(par("messageLength")));
     payload->setSequenceNumber(numSent);
     auto creationTimeTag = payload->addTag<CreationTimeTag>();
     creationTimeTag->setCreationTime(simTime());
-    packet->insertAtBack(payload);
+    packet->insertAtBack(payload);*/
+
     L3Address destAddr = chooseDestAddr();
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending a beacon " << endl << std::flush;
+
     emit(packetSentSignal, packet);
     socket.sendTo(packet, destAddr, destPort);
     numSent++;
@@ -166,7 +209,7 @@ void UdpBasicAppJolie::processStart()
     socket.bind(*localAddress ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
     setSocketOptions();
 
-    const char *destAddrs = par("destAddresses");
+    /*const char *destAddrs = par("destAddresses");
     cStringTokenizer tokenizer(destAddrs);
     const char *token;
 
@@ -177,7 +220,9 @@ void UdpBasicAppJolie::processStart()
         if (result.isUnspecified())
             EV_ERROR << "cannot resolve destination address: " << token << endl;
         destAddresses.push_back(result);
-    }
+    }*/
+
+    destAddresses.push_back(Ipv4Address::ALLONES_ADDRESS);
 
     IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
     if (ift) {
@@ -204,7 +249,6 @@ void UdpBasicAppJolie::processStart()
         }
     }
 
-    /*
     if (!destAddresses.empty()) {
         selfMsg->setKind(SEND);
         processSend();
@@ -215,7 +259,6 @@ void UdpBasicAppJolie::processStart()
             scheduleAt(stopTime, selfMsg);
         }
     }
-    */
 
     registerUAVs_CoAP_init();
 }
@@ -248,20 +291,22 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
         switch (selfMsg->getKind()) {
-            case START:
-                processStart();
-                break;
+        case START:
+            processStart();
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << "started the process" << endl << std::flush;
+            break;
 
-            case SEND:
-                processSend();
-                break;
+        case SEND:
+            processSend();
+            break;
 
-            case STOP:
-                processStop();
-                break;
+        case STOP:
+            processStop();
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << " stopped the process" << endl << std::flush;
+            break;
 
-            default:
-                throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
+        default:
+            throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
         }
     }
     else if (msg->getKind() == UDP_I_DATA) {
@@ -292,9 +337,33 @@ void UdpBasicAppJolie::processPacket(Packet *pk)
 {
     emit(packetReceivedSignal, pk);
     EV_INFO << "Received packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    manageReceivedBeacon(pk);
+
     delete pk;
     numReceived++;
 }
+
+void UdpBasicAppJolie::manageReceivedBeacon(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationBeacon>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationBeacon -- probably wrong client app, or wrong setting of UDP's parameters", pk->getClassName(), pk->getName());
+
+    Ipv4Address rcvIPAddr = appmsg->getSrc_info().src_ipAddr;
+    if (rcvIPAddr != myIPAddr){
+        if (neighMap.count(rcvIPAddr) == 0) {
+            neighMap[rcvIPAddr] = std::list<neigh_info_t>();
+        }
+        neigh_info_t rcvInfo;
+        rcvInfo.timestamp_lastSeen = simTime();
+        rcvInfo.info = appmsg->getSrc_info();
+
+        neighMap[rcvIPAddr].push_front(rcvInfo);
+
+        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
+    }
+}
+
 
 bool UdpBasicAppJolie::handleNodeStart(IDoneCallback *doneCallback)
 {
@@ -385,52 +454,6 @@ static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *re
         }
     }
 }
-
-/*
-void UdpBasicAppJolie::policyPostHandler (coap_context_t *ctx, struct coap_resource_t *resource,
-              const coap_endpoint_t *local_interface, coap_address_t *peer,
-              coap_pdu_t *request, struct str *token, coap_pdu_t *response)
-{
-    //unsigned char buf[3];
-    //const char* response_data     = "Hello World!";
-    //response->hdr->code           = COAP_RESPONSE_CODE(205);
-    //coap_add_option(response, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
-    ////coap_add_option(response, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_APPLICATION_JSON), buf);
-    //coap_add_data  (response, strlen(response_data), (unsigned char *)response_data);
-
-    std::cout << "Received a POST for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
-
-    unsigned char* data;
-    size_t         data_len;
-    //if (COAP_RESPONSE_CLASS(request->hdr->code) == 2)
-    {
-        if (coap_get_data(request, &data_len, &data))
-        {
-            char buffRis[1024];
-
-            memset(buffRis, 0, sizeof(buffRis));
-            memcpy(buffRis, data, std::min(sizeof(buffRis), data_len));
-
-            //printf("Received: %s\n", data);
-            std::cout << "Received |" << buffRis << "| from a client" << endl;
-
-            Document d;
-            d.Parse(buffRis);
-
-            StringBuffer buffer;
-            Writer<StringBuffer> writer(buffer);
-            d.Accept(writer);
-
-            std::cout << buffer.GetString() << std::endl;
-
-            //manageReceivedPolicy(d);
-        }
-    }
-}*/
-
-/*void UdpBasicAppJolie::addNewPolicy(policy &p) {
-
-}*/
 
 void UdpBasicAppJolie::serverCoAP_thread(void) {
 

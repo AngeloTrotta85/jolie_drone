@@ -59,13 +59,15 @@ void UdpBasicAppDrone::initialize(int stage)
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
 
+        mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
+
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
-
+        gatewayIpAddress = Ipv4Address::UNSPECIFIED_ADDRESS;
     }
 
     //std::cout << "UdpBasicAppDrone::initialize END - Stage " << stage << std::flush << endl;
@@ -117,9 +119,47 @@ L3Address UdpBasicAppDrone::chooseDestAddr()
     return destAddresses[k];
 }
 
-void UdpBasicAppDrone::sendPacket()
-{
-    std::ostringstream str;
+Packet *UdpBasicAppDrone::createBeaconPacket() {
+
+    char msgName[64];
+    node_info_msg_t mineInfo;
+    sprintf(msgName, "UDPBasicAppBeacon-%d-%d", myAppAddr, numSent);
+
+    long msgByteLength = (sizeof(struct node_info_msg_t)) + sizeof(uint32_t);
+    Packet *pk = new Packet(msgName);
+    const auto& payload = makeShared<ApplicationBeacon>();
+    payload->setChunkLength(B(msgByteLength));
+    payload->setSequenceNumber(numSent);
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    //std::cout << "(" << myIPAddr << ") createBeaconPacket() mob " << mob << endl << std::flush;
+
+    mineInfo.mob_position = mob->getCurrentPosition();
+    mineInfo.mob_velocity = mob->getCurrentVelocity();
+
+    mineInfo.src_appAddr = myAppAddr;
+    mineInfo.src_ipAddr = myIPAddr;
+
+    payload->setSrc_info(mineInfo);
+
+    pk->insertAtBack(payload);
+    pk->addPar("sourceId") = getId();
+    pk->addPar("msgId") = numSent;
+
+    return pk;
+}
+
+void UdpBasicAppDrone::sendPacket() {
+    Packet *packet;
+
+    //std::cout << "(" << myIPAddr << ") sendPacket() BEGIN " << endl << std::flush;
+
+    packet = createBeaconPacket();
+
+    //std::cout << "(" << myIPAddr << ") sendPacket() packet created " << endl << std::flush;
+
+    /*std::ostringstream str;
     str << packetName << "-" << numSent;
     Packet *packet = new Packet(str.str().c_str());
     const auto& payload = makeShared<ApplicationPacket>();
@@ -127,8 +167,13 @@ void UdpBasicAppDrone::sendPacket()
     payload->setSequenceNumber(numSent);
     auto creationTimeTag = payload->addTag<CreationTimeTag>();
     creationTimeTag->setCreationTime(simTime());
-    packet->insertAtBack(payload);
+    packet->insertAtBack(payload);*/
+
+
     L3Address destAddr = chooseDestAddr();
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending a beacon " << endl << std::flush;
+
     emit(packetSentSignal, packet);
     socket.sendTo(packet, destAddr, destPort);
     numSent++;
@@ -141,7 +186,7 @@ void UdpBasicAppDrone::processStart()
     socket.bind(*localAddress ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
     setSocketOptions();
 
-    const char *destAddrs = par("destAddresses");
+    /*const char *destAddrs = par("destAddresses");
     cStringTokenizer tokenizer(destAddrs);
     const char *token;
 
@@ -152,13 +197,15 @@ void UdpBasicAppDrone::processStart()
         if (result.isUnspecified())
             EV_ERROR << "cannot resolve destination address: " << token << endl;
         destAddresses.push_back(result);
-    }
+    }*/
+
+    destAddresses.push_back(Ipv4Address::ALLONES_ADDRESS);
 
     IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
     if (ift) {
+        char buf[64];
         for (int i = 0; i < (int)addressTable.size(); i++) {
 
-            char buf[32];
             //snprintf(buf, sizeof(buf), "UDPBurstML.host[%d]", i);
             snprintf(buf, sizeof(buf), "%s.host[%d]",this->getParentModule()->getParentModule()->getName(), i);
             //EV << "Looking for " << buf << endl;
@@ -173,6 +220,10 @@ void UdpBasicAppDrone::processStart()
                 addressTable[myAppAddr] = myIPAddr;
             }
         }
+
+        snprintf(buf, sizeof(buf), "%s.gateway",this->getParentModule()->getParentModule()->getName());
+        L3Address addr = L3AddressResolver().resolve(buf);
+        gatewayIpAddress = addr.toIpv4();
     }
 
 
@@ -256,8 +307,31 @@ void UdpBasicAppDrone::processPacket(Packet *pk)
 {
     emit(packetReceivedSignal, pk);
     EV_INFO << "Received packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    manageReceivedBeacon(pk);
+
     delete pk;
     numReceived++;
+}
+
+void UdpBasicAppDrone::manageReceivedBeacon(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationBeacon>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationBeacon -- probably wrong client app, or wrong setting of UDP's parameters", pk->getClassName(), pk->getName());
+
+    Ipv4Address rcvIPAddr = appmsg->getSrc_info().src_ipAddr;
+    if (rcvIPAddr != myIPAddr){
+        if (neighMap.count(rcvIPAddr) == 0) {
+            neighMap[rcvIPAddr] = std::list<UdpBasicAppJolie::neigh_info_t>();
+        }
+        UdpBasicAppJolie::neigh_info_t rcvInfo;
+        rcvInfo.timestamp_lastSeen = simTime();
+        rcvInfo.info = appmsg->getSrc_info();
+
+        neighMap[rcvIPAddr].push_front(rcvInfo);
+
+        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
+    }
 }
 
 bool UdpBasicAppDrone::handleNodeStart(IDoneCallback *doneCallback)

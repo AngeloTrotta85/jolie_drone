@@ -29,6 +29,12 @@
 #include <inet/applications/base/ApplicationBase.h>
 #include <inet/transportlayer/contract/udp/UdpSocket.h>
 
+#include "../base/ApplicationBeacon_m.h"
+
+#include "inet/mobility/single/VirtualSpringMobility.h"
+
+#include "UdpBasicAppJolie.h"
+
 namespace inet {
 
 /**
@@ -54,11 +60,17 @@ class INET_API UdpBasicAppDrone : public ApplicationBase
     int myAppAddr;
     Ipv4Address myIPAddr;
     std::vector<Ipv4Address> addressTable;
+    Ipv4Address gatewayIpAddress;
 
 
     // statistics
     int numSent = 0;
     int numReceived = 0;
+
+    //internal variables
+    IMobility *mob;
+
+    std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -80,6 +92,9 @@ class INET_API UdpBasicAppDrone : public ApplicationBase
     virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
     virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
     virtual void handleNodeCrash() override;
+
+    virtual void manageReceivedBeacon(Packet *msg);
+    virtual Packet *createBeaconPacket();
 
 
   public:

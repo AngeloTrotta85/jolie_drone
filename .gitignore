@@ -9,3 +9,4 @@ src/jolie_drone
 src/Makefile
 out/*
 out/
+simulations/jolie/results/*

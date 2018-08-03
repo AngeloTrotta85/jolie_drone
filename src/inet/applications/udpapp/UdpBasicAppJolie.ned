@@ -57,6 +57,16 @@ simple UdpBasicAppJolie like IApp
         string multicastInterface = default("");  // if not empty, set the multicast output interface option on the socket (interface name expected)
         bool receiveBroadcast = default(false); // if true, makes the socket receive broadcast packets
         bool joinLocalMulticastGroups = default(false); // if true, makes the socket receive packets from all multicast groups set on local interfaces
+        
+        double coapServerLoopTimer = default(0.05); // time to check message from the server-thread
+        string jolieAddress = default("192.168.1.177"); // address of the orchestrator
+        int jolieAddressPort = default(5683); // address port of the orchestrator
+        string gatewayRealAddress = default("192.168.1.176"); // address of the gateway
+        int gatewayRealAddressPort = default(5683); // address port of the gateway
+        string droneRegisterStringTemplate = default("{\"address\":\"%s:%d\",\"id\":%d}"); 									// template for the drone-register template message; 	example: {"address":"192.168.1.176:5683","id":0}                     
+        string dronePositionStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 	// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
+        string droneAlertStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 		// template for the drone-alert template message;   	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}                                      
+        
         @display("i=block/app");
         @signal[packetSent](type=Packet);
         @signal[packetReceived](type=Packet);

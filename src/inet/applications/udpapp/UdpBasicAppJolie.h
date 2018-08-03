@@ -24,10 +24,29 @@
 #include <coap.h>
 #include <vector>
 #include <thread>         // std::thread
+#include <mutex>          // std::mutex
+
+#include <arpa/inet.h>
+#include <cstdio>
 
 #include <inet/applications/base/ApplicationPacket_m.h>
 #include <inet/applications/base/ApplicationBase.h>
 #include <inet/transportlayer/contract/udp/UdpSocket.h>
+#include <inet/common/geometry/common/Coord.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+
+#define P_COVER 1
+#define P_STOP 2
+#define P_FOCUS 3
+/*
+typedef struct {
+  size_t length;    // length of string
+  unsigned char *s; // string data
+} str;
+*/
 
 namespace inet {
 
@@ -36,7 +55,29 @@ namespace inet {
  */
 class INET_API UdpBasicAppJolie : public ApplicationBase
 {
-  protected:
+public:
+
+    typedef struct policy {
+        int p_id;
+        char p_name[32];
+        int drone_id;
+        double distance;
+        Coord position;
+        double stiffness;
+    } policy;
+
+    friend std::ostream& operator<< (std::ostream& stream, const policy& pol) {
+        return stream
+                << "Policy ID: " << pol.p_id << "; "
+                << "Policy name: " << pol.p_name << "; "
+                << "drone ID: " << pol.drone_id << "; "
+                << "distance: " << pol.distance << "; "
+                << "position: " << pol.position << "; "
+                << "stiffness: " << pol.stiffness
+                << endl;
+    }
+
+protected:
     enum SelfMsgKinds { START = 1, SEND, STOP };
 
     // parameters
@@ -46,6 +87,17 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     simtime_t startTime;
     simtime_t stopTime;
     const char *packetName = nullptr;
+
+    // JSON message template
+    const char *droneRegisterStringTemplate = nullptr;
+    const char *dronePositionStringTemplate = nullptr;
+    const char *droneAlertStringTemplate = nullptr;
+
+    // address in the REAL world
+    const char *jolieAddress = nullptr;
+    int jolieAddressPort;
+    const char *gatewayRealAddress = nullptr;
+    int gatewayRealAddressPort;
 
     // state
     UdpSocket socket;
@@ -65,7 +117,12 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     int numSent = 0;
     int numReceived = 0;
 
-  protected:
+public:
+    //thread variables
+    static std::list<policy> policy_queue;
+    static std::mutex policy_queue_mtx;
+
+protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *msg) override;
@@ -87,13 +144,25 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
     virtual void handleNodeCrash() override;
 
     void serverCoAP_thread(void);
-    virtual void serverCoAP_mainLoop(void);
+
+    virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);
     virtual void registerUAVs_CoAP_init(void);
 
-  public:
+    void registerSingleUAV_CoAP(int idDrone);
+    void sendPositionSingleUAV_CoAP(int idDrone, double x, double y);
+    void sendAlertSingleUAV_CoAP(int idDrone, double x, double y);
+
+public:
     UdpBasicAppJolie() {}
     ~UdpBasicAppJolie();
+
+    //void policyPostHandler(coap_context_t *ctx, struct coap_resource_t *resource,
+    //        const coap_endpoint_t *local_interface, coap_address_t *peer,
+    //        coap_pdu_t *request, struct str *token, coap_pdu_t *response);
+
+    //static void addNewPolicy(policy &p);
+    static void manageReceivedPolicy(rapidjson::Document &doc);
 };
 
 } // namespace inet

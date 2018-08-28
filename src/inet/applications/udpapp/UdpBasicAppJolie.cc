@@ -69,6 +69,7 @@ void UdpBasicAppJolie::initialize(int stage)
         gatewayRealAddressPort = par("gatewayRealAddressPort");
 
         coapServer_loopTimer = par("coapServerLoopTimer");
+        neigh_timeout = par("neigh_timeout");
 
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -82,6 +83,9 @@ void UdpBasicAppJolie::initialize(int stage)
 
         coapServer_selfMsg = new cMessage("coapServer_loop");
         scheduleAt(simTime() + coapServer_loopTimer, coapServer_selfMsg);
+
+        self1Sec_selfMsg = new cMessage("1sec_self");
+        scheduleAt(simTime() + 1, self1Sec_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -195,12 +199,42 @@ void UdpBasicAppJolie::sendPacket()
 
     L3Address destAddr = chooseDestAddr();
 
-    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending a beacon " << endl << std::flush;
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending a beacon " << endl << std::flush;
 
     emit(packetSentSignal, packet);
     socket.sendTo(packet, destAddr, destPort);
     numSent++;
 }
+
+void UdpBasicAppJolie::send_policy_to_drone(policy *p) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppPolicy-%d-%d", myAppAddr, p->drone_id);
+
+    long msgByteLength = (sizeof(policy)) + sizeof(uint32_t) + sizeof(uint32_t);
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationPolicy>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setP_id(p->p_id);
+    payload->setDistance(p->distance);
+    payload->setDrone_id(p->drone_id);
+    payload->setPosition(p->position);
+    payload->setStiffness(p->stiffness);
+    for (int j = 0; j < (sizeof(p->p_name) / sizeof(char)); j++) {
+        payload->setP_name(j, p->p_name[j]);
+    }
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    L3Address destAddr = L3Address(addressTable[p->drone_id]);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
 
 void UdpBasicAppJolie::processStart()
 {
@@ -288,6 +322,10 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         serverCoAP_checkLoop();
         scheduleAt(simTime() + coapServer_loopTimer, coapServer_selfMsg);
     }
+    else if (msg == self1Sec_selfMsg) {
+        msg1sec_call();
+        scheduleAt(simTime() + 1, self1Sec_selfMsg);
+    }
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
         switch (selfMsg->getKind()) {
@@ -344,6 +382,20 @@ void UdpBasicAppJolie::processPacket(Packet *pk)
     numReceived++;
 }
 
+void UdpBasicAppJolie::msg1sec_call(void) {
+    for (auto& n : neighMap) {
+        auto it = n.second.begin();
+        while (it != n.second.end()) {
+            if (it->timestamp_lastSeen > neigh_timeout) {
+                it = n.second.erase(it);
+            }
+            else {
+                it++;
+            }
+        }
+    }
+}
+
 void UdpBasicAppJolie::manageReceivedBeacon(Packet *pk) {
     const auto& appmsg = pk->peekDataAt<ApplicationBeacon>(B(0), B(pk->getByteLength()));
     if (!appmsg)
@@ -360,7 +412,7 @@ void UdpBasicAppJolie::manageReceivedBeacon(Packet *pk) {
 
         neighMap[rcvIPAddr].push_front(rcvInfo);
 
-        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
+        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
     }
 }
 
@@ -627,6 +679,8 @@ void UdpBasicAppJolie::serverCoAP_checkLoop(void) {
         UdpBasicAppJolie::policy_queue.pop_front();
 
         std::cout << "Policy received!!!  --->  "<< actPolicy << endl;
+
+        send_policy_to_drone(&actPolicy);
     }
     UdpBasicAppJolie::policy_queue_mtx.unlock();
 
@@ -652,7 +706,6 @@ message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interfa
         }
     }
 }
-
 void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
 
     for (unsigned int i = 0; i < addressTable.size(); i++) {

@@ -57,6 +57,10 @@ simple UdpBasicAppDrone like IApp
         string multicastInterface = default("");  // if not empty, set the multicast output interface option on the socket (interface name expected)
         bool receiveBroadcast = default(false); // if true, makes the socket receive broadcast packets
         bool joinLocalMulticastGroups = default(false); // if true, makes the socket receive packets from all multicast groups set on local interfaces
+        
+        double mobility_timeout = default(0.1); // mobility update
+        double neigh_timeout = default(10);	// neighors timeout
+        
         @display("i=block/app");
         @signal[packetSent](type=Packet);
         @signal[packetReceived](type=Packet);

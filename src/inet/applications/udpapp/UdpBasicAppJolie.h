@@ -39,6 +39,7 @@
 #include "rapidjson/stringbuffer.h"
 
 #include "../base/ApplicationBeacon_m.h"
+#include "../base/ApplicationPolicy_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
@@ -95,6 +96,7 @@ protected:
     simtime_t startTime;
     simtime_t stopTime;
     const char *packetName = nullptr;
+    double neigh_timeout;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -128,6 +130,8 @@ protected:
     //internal variables
     IMobility *mob;
 
+    cMessage *self1Sec_selfMsg = nullptr;
+
     std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
 
 public:
@@ -158,8 +162,12 @@ protected:
 
     void serverCoAP_thread(void);
 
+    void msg1sec_call(void);
+
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
+
+    virtual void send_policy_to_drone(policy* p);
 
     virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);

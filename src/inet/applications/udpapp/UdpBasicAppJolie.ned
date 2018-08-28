@@ -65,7 +65,9 @@ simple UdpBasicAppJolie like IApp
         int gatewayRealAddressPort = default(5683); // address port of the gateway
         string droneRegisterStringTemplate = default("{\"address\":\"%s:%d\",\"id\":%d}"); 									// template for the drone-register template message; 	example: {"address":"192.168.1.176:5683","id":0}                     
         string dronePositionStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 	// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
-        string droneAlertStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 		// template for the drone-alert template message;   	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}                                      
+        string droneAlertStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 		// template for the drone-alert template message;   	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
+        
+        double neigh_timeout = default(10);	// neighors timeout                                      
         
         @display("i=block/app");
         @signal[packetSent](type=Packet);

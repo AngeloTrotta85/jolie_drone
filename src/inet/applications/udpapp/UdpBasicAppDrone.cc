@@ -56,14 +56,29 @@ void UdpBasicAppDrone::initialize(int stage)
         stopTime = par("stopTime");
         packetName = par("packetName");
 
+        neigh_timeout = par("neigh_timeout");
+        mobility_timeout = par("mobility_timeout");
+
+        actual_spring_stiffness = 1;
+        actual_spring_distance = 80;
+
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
 
+        setMyState(DS_STOP);
+
         mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
+        vmob = dynamic_cast<VirtualSpringMobility *>(this->getParentModule()->getSubmodule("mobility"));
 
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
+
+        self1Sec_selfMsg = new cMessage("1sec_self");
+        scheduleAt(simTime() + 1, self1Sec_selfMsg);
+
+        selfMobility_selfMsg = new cMessage("mobility_self");
+        scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -172,7 +187,7 @@ void UdpBasicAppDrone::sendPacket() {
 
     L3Address destAddr = chooseDestAddr();
 
-    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending a beacon " << endl << std::flush;
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending a beacon " << endl << std::flush;
 
     emit(packetSentSignal, packet);
     socket.sendTo(packet, destAddr, destPort);
@@ -260,7 +275,15 @@ void UdpBasicAppDrone::processStop()
 
 void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
 {
-    if (msg->isSelfMessage()) {
+    if (msg == self1Sec_selfMsg) {
+            msg1sec_call();
+            scheduleAt(simTime() + 1, self1Sec_selfMsg);
+        }
+    else if (msg == selfMobility_selfMsg) {
+        updateMobility();
+        scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
+    }
+    else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
         switch (selfMsg->getKind()) {
             case START:
@@ -281,7 +304,16 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
     }
     else if (msg->getKind() == UDP_I_DATA) {
         // process incoming packet
-        processPacket(check_and_cast<Packet *>(msg));
+        if (strncmp(msg->getName(), "UDPBasicAppPolicy", 17) == 0) {
+            manageNewPolicy(check_and_cast<Packet *>(msg));
+        }
+        else if (strncmp(msg->getName(), "UDPBasicAppBeacon", 17) == 0){
+            processPacket(check_and_cast<Packet *>(msg));
+        }
+        else {
+            throw cRuntimeError("Unrecognized data message (%s)%s", msg->getClassName(), msg->getName());
+        }
+
     }
     else if (msg->getKind() == UDP_I_ERROR) {
         EV_WARN << "Ignoring UDP error report\n";
@@ -301,6 +333,68 @@ void UdpBasicAppDrone::refreshDisplay() const
 
     sprintf(buf, "IP: %s", myIPAddr.str().c_str());
     this->getParentModule()->getDisplayString().setTagArg("t", 0, buf);
+}
+
+void UdpBasicAppDrone::msg1sec_call(void) {
+    for (auto& n : neighMap) {
+        auto it = n.second.begin();
+        while (it != n.second.end()) {
+            if (it->timestamp_lastSeen > neigh_timeout) {
+                it = n.second.erase(it);
+            }
+            else {
+                it++;
+            }
+        }
+    }
+}
+
+void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness) {
+    if (vmob) {
+        Coord myPos = mob->getCurrentPosition();
+
+        double springDispl = spring_l0 - destPos.distance(myPos);
+
+        Coord uVec = destPos - myPos;
+        uVec.normalize();
+
+        vmob->addVirtualSpring(uVec, spring_stiffness, spring_l0, springDispl);
+    }
+}
+
+void UdpBasicAppDrone::updateMobility(void) {
+    if (vmob) {
+        //Coord myPos = mob->getCurrentPosition();
+
+        // clear everything
+        vmob->clearVirtualSprings();
+
+        for (auto& n : neighMap) {
+            if (n.second.size() > 0) {
+                UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+                //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
+                Coord neighPos = ni->info.mob_position;
+
+                addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+
+                /*double distance = neighPos.distance(myPos);
+
+                double springDispl = actual_spring_distance - distance;
+
+                Coord uVec = neighPos - myPos;
+                uVec.normalize();
+
+                vmob->addVirtualSpring(uVec, actual_spring_stiffness, actual_spring_distance, springDispl);*/
+            }
+        }
+
+        if (getMyState() == DS_FOCUS) {
+            addVirtualSpringToMobility(focus_point, focus_spring_distance, focus_spring_stiffness);
+        }
+        else if (getMyState() == DS_STOP) {
+            addVirtualSpringToMobility(stop_point, stop_spring_distance, stop_spring_stiffness);
+        }
+    }
 }
 
 void UdpBasicAppDrone::processPacket(Packet *pk)
@@ -330,8 +424,45 @@ void UdpBasicAppDrone::manageReceivedBeacon(Packet *pk) {
 
         neighMap[rcvIPAddr].push_front(rcvInfo);
 
-        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
+        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
     }
+}
+
+void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationPolicy>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationPolicy -- probably wrong client app, or wrong setting of UDP's parameters", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received policy: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    int policy_id = appmsg->getP_id();
+    switch (policy_id) {
+    case P_COVER:
+        setMyState(DS_COVER);
+        actual_spring_stiffness = appmsg->getStiffness();
+        actual_spring_distance = appmsg->getDistance();
+        break;
+
+    case P_STOP:
+        setMyState(DS_STOP);
+        stop_point = appmsg->getPosition();
+        stop_spring_stiffness = appmsg->getStiffness();
+        stop_spring_distance = appmsg->getDistance();
+        break;
+
+    case P_FOCUS:
+        setMyState(DS_FOCUS);
+        focus_point = appmsg->getPosition();
+        focus_spring_stiffness = appmsg->getStiffness();
+        focus_spring_distance = appmsg->getDistance();
+        break;
+
+    default:
+        throw cRuntimeError("Unknown received policy. ID: %d", policy_id);
+        break;
+    }
+
+    delete pk;
 }
 
 bool UdpBasicAppDrone::handleNodeStart(IDoneCallback *doneCallback)
@@ -348,7 +479,6 @@ bool UdpBasicAppDrone::handleNodeShutdown(IDoneCallback *doneCallback)
 {
     if (selfMsg)
         cancelEvent(selfMsg);
-    //TODO if(socket.isOpened()) socket.close();
     return true;
 }
 

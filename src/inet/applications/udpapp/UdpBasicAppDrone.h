@@ -30,6 +30,7 @@
 #include <inet/transportlayer/contract/udp/UdpSocket.h>
 
 #include "../base/ApplicationBeacon_m.h"
+#include "../base/ApplicationPolicy_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
@@ -42,6 +43,13 @@ namespace inet {
  */
 class INET_API UdpBasicAppDrone : public ApplicationBase
 {
+public:
+    enum DroneState {
+        DS_COVER = 1,
+        DS_STOP = 2,
+        DS_FOCUS = 3
+    };
+
   protected:
     enum SelfMsgKinds { START = 1, SEND, STOP };
 
@@ -52,10 +60,13 @@ class INET_API UdpBasicAppDrone : public ApplicationBase
     simtime_t startTime;
     simtime_t stopTime;
     const char *packetName = nullptr;
+    double neigh_timeout;
+    double mobility_timeout;
 
     // state
     UdpSocket socket;
     cMessage *selfMsg = nullptr;
+    DroneState myState;
 
     int myAppAddr;
     Ipv4Address myIPAddr;
@@ -68,7 +79,21 @@ class INET_API UdpBasicAppDrone : public ApplicationBase
     int numReceived = 0;
 
     //internal variables
+    cMessage *self1Sec_selfMsg = nullptr;
+    cMessage *selfMobility_selfMsg = nullptr;
     IMobility *mob;
+    VirtualSpringMobility *vmob;
+
+    double actual_spring_stiffness;
+    double actual_spring_distance;
+
+    Coord focus_point;
+    double focus_spring_stiffness;
+    double focus_spring_distance;
+
+    Coord stop_point;
+    double stop_spring_stiffness;
+    double stop_spring_distance;
 
     std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
 
@@ -96,10 +121,19 @@ class INET_API UdpBasicAppDrone : public ApplicationBase
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
 
+    virtual void manageNewPolicy(Packet *pk);
+
+    void msg1sec_call(void);
+    void updateMobility(void);
+    void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness);
+
 
   public:
     UdpBasicAppDrone() {}
     ~UdpBasicAppDrone();
+
+    DroneState getMyState() const { return myState; }
+    void setMyState(DroneState myState) { this->myState = myState; }
 };
 
 } // namespace inet

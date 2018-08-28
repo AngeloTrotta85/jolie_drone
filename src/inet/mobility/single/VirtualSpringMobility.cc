@@ -105,6 +105,11 @@ void VirtualSpringMobility::move()
         }
     }
 
+    if (speed.length() > maxspeed) {
+        speed.normalize();
+        speed *= maxspeed;
+    }
+
     // accelerate
     // TODO ! is wrong!!!!
     //double speedLength = speed.length() + (acceleration.length() * elapsedTime);

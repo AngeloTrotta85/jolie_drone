@@ -294,7 +294,7 @@ void UdpBasicAppJolie::processStart()
         }
     }
 
-    registerUAVs_CoAP_init();
+    //registerUAVs_CoAP_init();
 }
 
 void UdpBasicAppJolie::processSend()
@@ -348,8 +348,24 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         }
     }
     else if (msg->getKind() == UDP_I_DATA) {
+
         // process incoming packet
-        processPacket(check_and_cast<Packet *>(msg));
+        if (strncmp(msg->getName(), "UDPBasicAppDroneReg", 19) == 0) {
+            manageNewRegistration(check_and_cast<Packet *>(msg));
+        }
+        else if (strncmp(msg->getName(), "UDPBasicAppDronePos", 19) == 0) {
+            manageNewPosition(check_and_cast<Packet *>(msg));
+        }
+        else if (strncmp(msg->getName(), "UDPBasicAppDroneAlert", 21) == 0) {
+            manageNewAlert(check_and_cast<Packet *>(msg));
+        }
+        else if (strncmp(msg->getName(), "UDPBasicAppBeacon", 17) == 0){
+            processPacket(check_and_cast<Packet *>(msg));
+        }
+        else {
+            throw cRuntimeError("Unrecognized data message (%s)%s", msg->getClassName(), msg->getName());
+        }
+
     }
     else if (msg->getKind() == UDP_I_ERROR) {
         EV_WARN << "Ignoring UDP error report\n";
@@ -380,6 +396,42 @@ void UdpBasicAppJolie::processPacket(Packet *pk)
 
     delete pk;
     numReceived++;
+}
+
+void UdpBasicAppJolie::manageNewRegistration(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneRegister>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneRegister", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Registration: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    registerSingleUAV_CoAP(appmsg->getDrone_appAddr());
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewPosition(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDronePosition>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDronePosition", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Position: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    sendPositionSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewAlert(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneAlert>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneAlert", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    sendAlertSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+
+    delete pk;
 }
 
 void UdpBasicAppJolie::msg1sec_call(void) {

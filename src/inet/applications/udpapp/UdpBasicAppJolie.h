@@ -40,6 +40,9 @@
 
 #include "../base/ApplicationBeacon_m.h"
 #include "../base/ApplicationPolicy_m.h"
+#include "../base/ApplicationDroneAlert_m.h"
+#include "../base/ApplicationDronePosition_m.h"
+#include "../base/ApplicationDroneRegister_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
@@ -168,6 +171,10 @@ protected:
     virtual Packet *createBeaconPacket();
 
     virtual void send_policy_to_drone(policy* p);
+
+    void manageNewRegistration(Packet *pk);
+    void manageNewPosition(Packet *pk);
+    void manageNewAlert(Packet *pk);
 
     virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);

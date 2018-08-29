@@ -58,9 +58,11 @@ void UdpBasicAppDrone::initialize(int stage)
 
         neigh_timeout = par("neigh_timeout");
         mobility_timeout = par("mobility_timeout");
+        thresholdPositionUpdate = par("thresholdPositionUpdate");
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
+        lastSentPosition = Coord::NIL;
 
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -252,6 +254,8 @@ void UdpBasicAppDrone::processStart()
             scheduleAt(stopTime, selfMsg);
         }
     }
+
+    registerUAV_init();
 }
 
 void UdpBasicAppDrone::processSend()
@@ -346,6 +350,13 @@ void UdpBasicAppDrone::msg1sec_call(void) {
                 it++;
             }
         }
+    }
+
+    //check to send the position
+    if (    (lastSentPosition == Coord::NIL) ||
+            (mob->getCurrentPosition().distance(lastSentPosition) > thresholdPositionUpdate) ) {
+        positionUAV_update();
+        lastSentPosition = mob->getCurrentPosition();
     }
 }
 
@@ -463,6 +474,77 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
     }
 
     delete pk;
+}
+
+void UdpBasicAppDrone::registerUAV_init(void) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppDroneReg-%d", myAppAddr);
+
+    long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t);
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDroneRegister>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
+void UdpBasicAppDrone::positionUAV_update(void) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppDronePos-%d", myAppAddr);
+
+    long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + (2.0 * sizeof(double));
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDronePosition>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+    payload->setPosition(mob->getCurrentPosition());
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
+void UdpBasicAppDrone::alertUAV_send(void) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppDroneAlert-%d", myAppAddr);
+
+    long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + (2.0 * sizeof(double));
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDroneAlert>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+    payload->setPosition(mob->getCurrentPosition());
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
 }
 
 bool UdpBasicAppDrone::handleNodeStart(IDoneCallback *doneCallback)

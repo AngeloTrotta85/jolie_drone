@@ -31,6 +31,9 @@
 
 #include "../base/ApplicationBeacon_m.h"
 #include "../base/ApplicationPolicy_m.h"
+#include "../base/ApplicationDroneAlert_m.h"
+#include "../base/ApplicationDronePosition_m.h"
+#include "../base/ApplicationDroneRegister_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
@@ -95,6 +98,9 @@ public:
     double stop_spring_stiffness;
     double stop_spring_distance;
 
+    Coord lastSentPosition;
+    double thresholdPositionUpdate;
+
     std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
 
   protected:
@@ -122,6 +128,10 @@ public:
     virtual Packet *createBeaconPacket();
 
     virtual void manageNewPolicy(Packet *pk);
+
+    virtual void registerUAV_init(void);
+    virtual void positionUAV_update(void);
+    virtual void alertUAV_send(void);
 
     void msg1sec_call(void);
     void updateMobility(void);

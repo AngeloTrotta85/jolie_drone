@@ -60,6 +60,7 @@ simple UdpBasicAppDrone like IApp
         
         double mobility_timeout = default(0.1); // mobility update
         double neigh_timeout = default(10);	// neighors timeout
+        double thresholdPositionUpdate @unit(m) = default(2m); // threshold to send position update
         
         @display("i=block/app");
         @signal[packetSent](type=Packet);

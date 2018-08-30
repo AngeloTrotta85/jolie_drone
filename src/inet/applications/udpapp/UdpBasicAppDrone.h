@@ -100,6 +100,7 @@ public:
 
     Coord lastSentPosition;
     double thresholdPositionUpdate;
+    cMessage *selfPosition_selfMsg = nullptr;
 
     std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
 
@@ -135,6 +136,8 @@ public:
 
     void msg1sec_call(void);
     void updateMobility(void);
+    void sendUpdatePosition(void);
+    void checkAlert(void);
     void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness);
 
 

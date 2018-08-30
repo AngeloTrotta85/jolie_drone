@@ -50,6 +50,10 @@ class ApplicationBeacon extends FieldsChunk
     uint32_t sequenceNumber;
     node_info_msg_t src_info;
     
+    int uavReferee;
+    bool isGW;
+    
+    
     //Ipv4Address nhAddr[];
     //int nhByteGen[];
     //double nhMBsecGen[];

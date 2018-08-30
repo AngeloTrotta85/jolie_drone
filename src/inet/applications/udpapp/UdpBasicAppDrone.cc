@@ -62,7 +62,7 @@ void UdpBasicAppDrone::initialize(int stage)
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
-        lastSentPosition = Coord::NIL;
+        lastSentPosition = Coord::ZERO;
 
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -75,6 +75,8 @@ void UdpBasicAppDrone::initialize(int stage)
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
+
+        selfPosition_selfMsg = new cMessage("selfPosition_selfMsg");
 
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
@@ -159,6 +161,7 @@ Packet *UdpBasicAppDrone::createBeaconPacket() {
     mineInfo.src_ipAddr = myIPAddr;
 
     payload->setSrc_info(mineInfo);
+    payload->setUavReferee(-1);
 
     pk->insertAtBack(payload);
     pk->addPar("sourceId") = getId();
@@ -256,6 +259,10 @@ void UdpBasicAppDrone::processStart()
     }
 
     registerUAV_init();
+
+    stop_point = mob->getCurrentPosition();
+    stop_spring_distance = 0;
+    stop_spring_stiffness = 100;
 }
 
 void UdpBasicAppDrone::processSend()
@@ -280,18 +287,24 @@ void UdpBasicAppDrone::processStop()
 void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
 {
     if (msg == self1Sec_selfMsg) {
-            msg1sec_call();
-            scheduleAt(simTime() + 1, self1Sec_selfMsg);
-        }
+        msg1sec_call();
+        scheduleAt(simTime() + 1, self1Sec_selfMsg);
+    }
     else if (msg == selfMobility_selfMsg) {
         updateMobility();
         scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
+    }
+    else if (msg == selfPosition_selfMsg) {
+        sendUpdatePosition();
+        checkAlert();
+        scheduleAt(simTime() + 1, selfPosition_selfMsg);
     }
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
         switch (selfMsg->getKind()) {
             case START:
                 processStart();
+                scheduleAt(simTime() + 1, selfPosition_selfMsg);
                 break;
 
             case SEND:
@@ -351,13 +364,6 @@ void UdpBasicAppDrone::msg1sec_call(void) {
             }
         }
     }
-
-    //check to send the position
-    if (    (lastSentPosition == Coord::NIL) ||
-            (mob->getCurrentPosition().distance(lastSentPosition) > thresholdPositionUpdate) ) {
-        positionUAV_update();
-        lastSentPosition = mob->getCurrentPosition();
-    }
 }
 
 void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness) {
@@ -373,6 +379,32 @@ void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l
     }
 }
 
+void UdpBasicAppDrone::checkAlert(void) {
+    if (getMyState() == DS_COVER) {
+        if ((simTime() > 30.5) && (simTime() < 31.5) && (myAppAddr == 0)) {
+            alertUAV_send();
+        }
+    }
+}
+
+void UdpBasicAppDrone::sendUpdatePosition(void) {
+    //check to send the position
+
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Check position"
+    //        << " - lastSentPosition = " << lastSentPosition
+    //        << " - mob->getCurrentPosition(): " << mob->getCurrentPosition()
+    //        << " - distance: " << mob->getCurrentPosition().distance(lastSentPosition)
+    //        << " - thresholdPositionUpdate: " << thresholdPositionUpdate
+    //        << endl << std::flush;
+
+    if (    (lastSentPosition == Coord::ZERO) ||
+            (mob->getCurrentPosition().distance(lastSentPosition) > thresholdPositionUpdate) ) {
+        positionUAV_update();
+        lastSentPosition = mob->getCurrentPosition();
+    }
+    //positionUAV_update();
+}
+
 void UdpBasicAppDrone::updateMobility(void) {
     if (vmob) {
         //Coord myPos = mob->getCurrentPosition();
@@ -381,8 +413,13 @@ void UdpBasicAppDrone::updateMobility(void) {
         vmob->clearVirtualSprings();
 
         for (auto& n : neighMap) {
+
             if (n.second.size() > 0) {
                 UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+
+                //if ((ni->isGW) && (ni->uavReferee != myAppAddr)) continue; // remove the gateway
+                if (ni->isGW) continue; // remove the gateway
+
                 //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
                 Coord neighPos = ni->info.mob_position;
 
@@ -396,6 +433,22 @@ void UdpBasicAppDrone::updateMobility(void) {
                 uVec.normalize();
 
                 vmob->addVirtualSpring(uVec, actual_spring_stiffness, actual_spring_distance, springDispl);*/
+            }
+        }
+
+        for (auto& n : neighMap) {
+            if (n.second.size() > 0) {
+                UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+                if (ni->isGW) {
+                    if (ni->uavReferee == myAppAddr) {
+                        Coord neighPos = ni->info.mob_position;
+                        double distance = neighPos.distance(mob->getCurrentPosition());
+                        if (distance > actual_spring_distance) {
+                            addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+                        }
+                    }
+                    break;
+                }
             }
         }
 
@@ -432,6 +485,8 @@ void UdpBasicAppDrone::manageReceivedBeacon(Packet *pk) {
         UdpBasicAppJolie::neigh_info_t rcvInfo;
         rcvInfo.timestamp_lastSeen = simTime();
         rcvInfo.info = appmsg->getSrc_info();
+        rcvInfo.uavReferee = appmsg->getUavReferee();
+        rcvInfo.isGW = appmsg->isGW();
 
         neighMap[rcvIPAddr].push_front(rcvInfo);
 
@@ -445,6 +500,8 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
         throw cRuntimeError("Message (%s)%s is not a ApplicationPolicy -- probably wrong client app, or wrong setting of UDP's parameters", pk->getClassName(), pk->getName());
 
     EV_INFO << "Received policy: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] received a new policy. Policy ID: "<< appmsg->getP_id() << endl << std::flush;
 
     int policy_id = appmsg->getP_id();
     switch (policy_id) {
@@ -495,6 +552,8 @@ void UdpBasicAppDrone::registerUAV_init(void) {
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the registration" << endl << std::flush;
+
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
 }
@@ -519,6 +578,8 @@ void UdpBasicAppDrone::positionUAV_update(void) {
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the position: " << mob->getCurrentPosition() << endl << std::flush;
+
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
 }
@@ -542,6 +603,8 @@ void UdpBasicAppDrone::alertUAV_send(void) {
 
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the alert: " << mob->getCurrentPosition() << endl << std::flush;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);

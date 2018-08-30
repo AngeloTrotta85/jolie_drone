@@ -68,6 +68,8 @@ public:
     typedef struct {
         simtime_t timestamp_lastSeen;
         node_info_msg_t info;
+        int uavReferee;
+        bool isGW;
     } neigh_info_t;
 
     typedef struct policy {
@@ -169,6 +171,7 @@ protected:
 
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
+    int getCloserUAV(void);
 
     virtual void send_policy_to_drone(policy* p);
 

@@ -16,6 +16,7 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+//std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
 
 #include "UdpBasicAppJolie.h"
 
@@ -149,6 +150,21 @@ L3Address UdpBasicAppJolie::chooseDestAddr()
     return destAddresses[k];
 }
 
+int UdpBasicAppJolie::getCloserUAV(void) {
+    int closer = -1;
+    double minDistance = std::numeric_limits<double>::max();
+
+    for (auto& n : neighMap) {
+        double d = mob->getCurrentPosition().distance(n.second.begin()->info.mob_position);
+        if (d < minDistance) {
+            d = minDistance;
+            closer = n.second.begin()->info.src_appAddr;
+        }
+    }
+
+    return closer;
+}
+
 Packet *UdpBasicAppJolie::createBeaconPacket() {
 
     char msgName[64];
@@ -170,6 +186,7 @@ Packet *UdpBasicAppJolie::createBeaconPacket() {
     mineInfo.src_ipAddr = myIPAddr;
 
     payload->setSrc_info(mineInfo);
+    payload->setUavReferee(getCloserUAV());
 
     pk->insertAtBack(payload);
     pk->addPar("sourceId") = getId();
@@ -392,6 +409,8 @@ void UdpBasicAppJolie::processPacket(Packet *pk)
     emit(packetReceivedSignal, pk);
     EV_INFO << "Received packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
 
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon" << endl << std::flush;
+
     manageReceivedBeacon(pk);
 
     delete pk;
@@ -405,6 +424,8 @@ void UdpBasicAppJolie::manageNewRegistration(Packet *pk) {
 
     EV_INFO << "Received Registration: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a registration" << endl << std::flush;
+
     registerSingleUAV_CoAP(appmsg->getDrone_appAddr());
 
     delete pk;
@@ -417,6 +438,8 @@ void UdpBasicAppJolie::manageNewPosition(Packet *pk) {
 
     EV_INFO << "Received Position: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a position" << endl << std::flush;
+
     sendPositionSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
 
     delete pk;
@@ -428,6 +451,8 @@ void UdpBasicAppJolie::manageNewAlert(Packet *pk) {
         throw cRuntimeError("Message (%s)%s is not a ApplicationDroneAlert", pk->getClassName(), pk->getName());
 
     EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an alert" << endl << std::flush;
 
     sendAlertSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
 
@@ -461,6 +486,8 @@ void UdpBasicAppJolie::manageReceivedBeacon(Packet *pk) {
         neigh_info_t rcvInfo;
         rcvInfo.timestamp_lastSeen = simTime();
         rcvInfo.info = appmsg->getSrc_info();
+        rcvInfo.uavReferee = appmsg->getUavReferee();
+        rcvInfo.isGW = appmsg->isGW();
 
         neighMap[rcvIPAddr].push_front(rcvInfo);
 
@@ -529,7 +556,7 @@ static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *re
     ////coap_add_option(response, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_APPLICATION_JSON), buf);
     //coap_add_data  (response, strlen(response_data), (unsigned char *)response_data);
 
-    std::cout << "SERVER THREAD - Received a POST for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
+    std::cout << simTime() << " - (" << 0 << "|" << "10.0.0.1" << ")[GWY] SERVER THREAD - Received a POST for policy. hdr-code: " << COAP_RESPONSE_CLASS(request->hdr->code) << endl;
 
     unsigned char* data;
     size_t         data_len;
@@ -543,7 +570,7 @@ static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *re
             memcpy(buffRis, data, std::min(sizeof(buffRis), data_len));
 
             //printf("Received: %s\n", data);
-            std::cout << "SERVER THREAD - Received |" << buffRis << "| from a client" << endl;
+            std::cout << simTime() << " - (" << 0 << "|" << "10.0.0.1" << ")[GWY] SERVER THREAD - Received |" << buffRis << "| from a client" << endl;
 
             Document d;
             d.Parse(buffRis);
@@ -552,7 +579,7 @@ static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *re
             Writer<StringBuffer> writer(buffer);
             d.Accept(writer);
 
-            std::cout << "SERVER THREAD - " << buffer.GetString() << std::endl;
+            std::cout << simTime() << " - (" << 0 << "|" << "10.0.0.1" << ")[GWY] SERVER THREAD - " << buffer.GetString() << std::endl;
 
             UdpBasicAppJolie::manageReceivedPolicy(d);
         }
@@ -776,7 +803,7 @@ void UdpBasicAppJolie::registerSingleUAV_CoAP(int idDrone) {
     memset (buff, 0, sizeof(buff));
 
     //{\"address\":\"%s:%d\",\"id\":%d}
-    std::cout << "Sending CoAP registration using template: |" << droneRegisterStringTemplate << "|" << endl;
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP registration using template: |" << droneRegisterStringTemplate << "|" << endl;
     buffStrLen = snprintf(buff, sizeof(buff), droneRegisterStringTemplate, gatewayRealAddress, gatewayRealAddressPort, idDrone);
 
     coap_context_t*   ctx;
@@ -793,7 +820,7 @@ void UdpBasicAppJolie::registerSingleUAV_CoAP(int idDrone) {
 
 
 
-    std::cout << "Sending CoAP registration for Drone: " << idDrone << " having local IP: " << addressTable[idDrone]
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP registration for Drone: " << idDrone << " having local IP: " << addressTable[idDrone]
               << " using string: |" << buff << "|. Sending to " << server_uri << " - port: " << jolieAddressPort << endl;
 
     /* Prepare coap socket*/
@@ -853,7 +880,7 @@ void UdpBasicAppJolie::sendPositionSingleUAV_CoAP(int idDrone, double x, double 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP BEGIN" << std::flush << endl;
 
-    std::cout << "Sending CoAP position for Drone: " << idDrone << " with position (" << x << ";" << y << ")" << endl;
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP position for Drone: " << idDrone << " with position (" << x << ";" << y << ")" << endl;
     memset (buff, 0, sizeof(buff));
 
     //{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}
@@ -928,7 +955,7 @@ void UdpBasicAppJolie::sendAlertSingleUAV_CoAP(int idDrone, double x, double y) 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP BEGIN" << std::flush << endl;
 
-    std::cout << "Sending CoAP alert for Drone: " << idDrone << " with position (" << x << ";" << y << ")" << endl;
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP alert for Drone: " << idDrone << " with position (" << x << ";" << y << ")" << endl;
     memset (buff, 0, sizeof(buff));
 
     //{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}

@@ -42,6 +42,7 @@
 #include "../base/ApplicationPolicy_m.h"
 #include "../base/ApplicationDroneAlert_m.h"
 #include "../base/ApplicationDronePosition_m.h"
+#include "../base/ApplicationDroneEnergy_m.h"
 #include "../base/ApplicationDroneRegister_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
@@ -106,6 +107,7 @@ protected:
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
     const char *dronePositionStringTemplate = nullptr;
+    const char *droneEnergyStringTemplate = nullptr;
     const char *droneAlertStringTemplate = nullptr;
 
     // address in the REAL world
@@ -177,6 +179,7 @@ protected:
 
     void manageNewRegistration(Packet *pk);
     void manageNewPosition(Packet *pk);
+    void manageNewEnergy(Packet *pk);
     void manageNewAlert(Packet *pk);
 
     virtual void serverCoAP_checkLoop(void);
@@ -185,6 +188,7 @@ protected:
 
     void registerSingleUAV_CoAP(int idDrone);
     void sendPositionSingleUAV_CoAP(int idDrone, double x, double y);
+    void sendEnergySingleUAV_CoAP(int idDrone, double residual);
     void sendAlertSingleUAV_CoAP(int idDrone, double x, double y);
 
 public:

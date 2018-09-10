@@ -31,6 +31,8 @@
 
 namespace inet {
 
+using namespace inet::power;
+
 Define_Module(UdpBasicAppDrone);
 
 UdpBasicAppDrone::~UdpBasicAppDrone()
@@ -59,10 +61,12 @@ void UdpBasicAppDrone::initialize(int stage)
         neigh_timeout = par("neigh_timeout");
         mobility_timeout = par("mobility_timeout");
         thresholdPositionUpdate = par("thresholdPositionUpdate");
+        thresholdEnergyUpdate = par("thresholdEnergyUpdate");
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
         lastSentPosition = Coord::ZERO;
+        lastSentEnergy = -1;
 
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -71,6 +75,9 @@ void UdpBasicAppDrone::initialize(int stage)
 
         mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
         vmob = dynamic_cast<VirtualSpringMobility *>(this->getParentModule()->getSubmodule("mobility"));
+
+        energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
+        powerConsumption = W(0);
 
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
@@ -85,6 +92,7 @@ void UdpBasicAppDrone::initialize(int stage)
         scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
+        energySource->addEnergyConsumer(this);
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
         gatewayIpAddress = Ipv4Address::UNSPECIFIED_ADDRESS;
     }
@@ -296,6 +304,7 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
     }
     else if (msg == selfPosition_selfMsg) {
         sendUpdatePosition();
+        sendUpdateEnergy();
         checkAlert();
         scheduleAt(simTime() + 1, selfPosition_selfMsg);
     }
@@ -401,6 +410,18 @@ void UdpBasicAppDrone::sendUpdatePosition(void) {
             (mob->getCurrentPosition().distance(lastSentPosition) > thresholdPositionUpdate) ) {
         positionUAV_update();
         lastSentPosition = mob->getCurrentPosition();
+    }
+    //positionUAV_update();
+}
+
+void UdpBasicAppDrone::sendUpdateEnergy(void) {
+    //check to send the energy
+    double actEnergy = 0;
+
+    if (    (lastSentEnergy < 0) ||
+            (fabs(actEnergy - lastSentEnergy) > thresholdEnergyUpdate) ) {
+        energyUAV_update();
+        lastSentEnergy = 0;
     }
     //positionUAV_update();
 }
@@ -584,6 +605,32 @@ void UdpBasicAppDrone::positionUAV_update(void) {
     socket.sendTo(packet, destAddr, destPort);
 }
 
+void UdpBasicAppDrone::energyUAV_update(void) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppDroneEnergy-%d", myAppAddr);
+
+    long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + (2.0 * sizeof(double));
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDroneEnergy>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+    payload->setResidual(0);  //TODO
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the energy: " << 0 << endl << std::flush;
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
 void UdpBasicAppDrone::alertUAV_send(void) {
     char msgName[64];
     sprintf(msgName, "UDPBasicAppDroneAlert-%d", myAppAddr);
@@ -631,6 +678,20 @@ void UdpBasicAppDrone::handleNodeCrash()
 {
     if (selfMsg)
         cancelEvent(selfMsg);
+}
+
+void UdpBasicAppDrone::takeSnapshot(void) {
+    powerConsumption = W(2); // = computePowerConsumption();
+
+
+    emit(powerConsumptionChangedSignal, powerConsumption.get());
+}
+
+void UdpBasicAppDrone::executeImageRecognition(void) {
+    powerConsumption = W(2); // = computePowerConsumption();
+
+
+    emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 

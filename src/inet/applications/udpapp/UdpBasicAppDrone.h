@@ -36,6 +36,8 @@
 #include "../base/ApplicationDroneRegister_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
+#include "inet/power/contract/IEpEnergyConsumer.h"
+#include "inet/power/contract/IEpEnergySource.h"
 
 #include "UdpBasicAppJolie.h"
 
@@ -44,7 +46,7 @@ namespace inet {
 /**
  * UDP application. See NED for more info.
  */
-class INET_API UdpBasicAppDrone : public ApplicationBase
+class INET_API UdpBasicAppDrone : public ApplicationBase, public power::IEpEnergyConsumer
 {
 public:
     enum DroneState {
@@ -100,9 +102,14 @@ public:
 
     Coord lastSentPosition;
     double thresholdPositionUpdate;
+    double lastSentEnergy;
+    double thresholdEnergyUpdate;
     cMessage *selfPosition_selfMsg = nullptr;
 
     std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
+
+    power::IEpEnergySource *energySource = nullptr;
+    W powerConsumption = W(NaN);
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -132,13 +139,18 @@ public:
 
     virtual void registerUAV_init(void);
     virtual void positionUAV_update(void);
+    virtual void energyUAV_update(void);
     virtual void alertUAV_send(void);
 
     void msg1sec_call(void);
     void updateMobility(void);
     void sendUpdatePosition(void);
+    void sendUpdateEnergy(void);
     void checkAlert(void);
     void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness);
+
+    virtual void takeSnapshot(void);
+    virtual void executeImageRecognition(void);
 
 
   public:
@@ -147,6 +159,9 @@ public:
 
     DroneState getMyState() const { return myState; }
     void setMyState(DroneState myState) { this->myState = myState; }
+
+    virtual power::IEnergySource *getEnergySource() const override { return energySource; }
+    virtual W getPowerConsumption() const override { return powerConsumption; }
 };
 
 } // namespace inet

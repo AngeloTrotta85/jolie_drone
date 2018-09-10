@@ -63,6 +63,7 @@ void UdpBasicAppJolie::initialize(int stage)
 
         droneRegisterStringTemplate = par("droneRegisterStringTemplate");
         dronePositionStringTemplate = par("dronePositionStringTemplate");
+        droneEnergyStringTemplate = par("droneEnergyStringTemplate");
         droneAlertStringTemplate = par("droneAlertStringTemplate");
         jolieAddress = par("jolieAddress");
         jolieAddressPort = par("jolieAddressPort");
@@ -373,6 +374,9 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         else if (strncmp(msg->getName(), "UDPBasicAppDronePos", 19) == 0) {
             manageNewPosition(check_and_cast<Packet *>(msg));
         }
+        else if (strncmp(msg->getName(), "UDPBasicAppDroneEnergy", 22) == 0) {
+            manageNewEnergy(check_and_cast<Packet *>(msg));
+        }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneAlert", 21) == 0) {
             manageNewAlert(check_and_cast<Packet *>(msg));
         }
@@ -441,6 +445,20 @@ void UdpBasicAppJolie::manageNewPosition(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a position" << endl << std::flush;
 
     sendPositionSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewEnergy(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneEnergy>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDronePosition", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Energy: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a energy" << endl << std::flush;
+
+    sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
 
     delete pk;
 }
@@ -885,6 +903,81 @@ void UdpBasicAppJolie::sendPositionSingleUAV_CoAP(int idDrone, double x, double 
 
     //{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}
     buffStrLen = snprintf(buff, sizeof(buff), dronePositionStringTemplate, idDrone, x, y);
+
+    coap_context_t*   ctx;
+    coap_address_t    dst_addr, src_addr;
+    static coap_uri_t uri;
+    fd_set            readfds;
+    coap_pdu_t*       request;
+    unsigned char     get_method = 1;
+    unsigned char     post_method = 2;
+    //const char*       server_uri = "coap://192.168.1.177/register";
+    char              server_uri[64];
+
+    snprintf(server_uri, sizeof(server_uri), "coap://%s/position", jolieAddress);
+
+    /* Prepare coap socket*/
+    coap_address_init(&src_addr);
+    src_addr.addr.sin.sin_family      = AF_INET;
+    src_addr.addr.sin.sin_port        = htons(0);
+    src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
+    ctx = coap_new_context(&src_addr);
+
+    /* The destination endpoint */
+    coap_address_init(&dst_addr);
+    dst_addr.addr.sin.sin_family      = AF_INET;
+    dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
+    //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
+    dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
+
+    /* Prepare the request */
+    coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
+    request            = coap_new_pdu();
+    request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
+    request->hdr->id   = coap_new_message_id(ctx);
+    request->hdr->code = post_method;
+    coap_add_option(request, COAP_OPTION_URI_PATH, uri.path.length, uri.path.s);
+    //coap_add_option(request, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
+    coap_add_option(request, COAP_OPTION_CONTENT_TYPE, coap_encode_var_bytes(buf, COAP_MEDIATYPE_APPLICATION_JSON), buf);
+    coap_add_data  (request, buffStrLen, (unsigned char *)buff);
+
+    //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
+
+    // Set the handler and send the request
+    /*coap_register_response_handler(ctx, message_handler);
+    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
+    coap_send(ctx, ctx->endpoint, &dst_addr, request);
+    FD_ZERO(&readfds);
+    FD_SET( ctx->sockfd, &readfds );
+    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
+    if ( result < 0 ) // socket error
+    {
+        exit(EXIT_FAILURE);
+    }
+    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
+    {
+        coap_read( ctx );
+    }*/
+
+    coap_send(ctx, ctx->endpoint, &dst_addr, request);
+
+
+    //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+}
+
+
+void UdpBasicAppJolie::sendEnergySingleUAV_CoAP(int idDrone, double residual) {
+    char buff[512];
+    unsigned char buf[3];
+    int buffStrLen;
+
+    //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP BEGIN" << std::flush << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP Energy for Drone: " << idDrone << " with residual (" << residual << ")" << endl;
+    memset (buff, 0, sizeof(buff));
+
+    //{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}
+    buffStrLen = snprintf(buff, sizeof(buff), dronePositionStringTemplate, idDrone, residual);
 
     coap_context_t*   ctx;
     coap_address_t    dst_addr, src_addr;

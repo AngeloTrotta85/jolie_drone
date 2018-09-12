@@ -20,10 +20,12 @@
 #include "inet/common/INETDefs.h"
 
 #include "inet/mobility/base/MovingMobilityBase.h"
+#include "inet/power/contract/IEpEnergyConsumer.h"
+#include "inet/power/contract/IEpEnergySource.h"
 
 namespace inet {
 
-class VirtualSpringMobility : public MovingMobilityBase {
+class VirtualSpringMobility : public MovingMobilityBase, public power::IEpEnergyConsumer {
 
 public:
     typedef struct {
@@ -77,6 +79,10 @@ public:
     /** @brief Filter the node list by doing the acute angle test */
     void filterNodeListAcuteAngleTest(std::list<NodeBasicInfo> &original, std::list<NodeBasicInfo> &filtered);
 
+
+    virtual power::IEnergySource *getEnergySource() const override { return energySource; }
+    virtual W getPowerConsumption() const override { return powerConsumption; }
+
 protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
 
@@ -85,6 +91,8 @@ protected:
 
     /** @brief Move the host*/
     virtual void move() override;
+
+    virtual void drainEnergyByAllMotors(void);
 
 private:
     /** @brief Calculate the force */
@@ -98,6 +106,9 @@ private:
 
     /** @brief Calculate the angle BAC */
     double calculateAngle(Coord a, Coord b, Coord c);
+
+    /** @brief Calculate total motors consumption */
+    W calculateTotalMotorConsumption(void);
 
 
 protected:
@@ -131,9 +142,15 @@ protected:
     /** @brief Actual acceleration of the node */
     Coord acceleration;
 
+    /** @brief Single motor consumption */
+    W motorConsumption;
+
 private:
     std::map <unsigned int, ForceInfo> activeForces;
     unsigned int counterIdx;
+
+    power::IEpEnergySource *energySource = nullptr;
+    W powerConsumption = W(NaN);
 };
 
 } /* namespace inet */

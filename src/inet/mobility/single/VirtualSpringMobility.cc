@@ -21,6 +21,8 @@
 
 namespace inet {
 
+using namespace inet::power;
+
 Define_Module(VirtualSpringMobility);
 
 VirtualSpringMobility::VirtualSpringMobility() {}
@@ -39,11 +41,14 @@ void VirtualSpringMobility::initialize(int stage)
         frictionForce = par("frictionForce");
         dragCoefficient = par("dragCoefficient");
         defaultStiffness = par("defaultStiffness");
+        motorConsumption = W(par("motorConsumption"));
 
         speed = Coord::ZERO;
         acceleration = Coord::ZERO;
         virtualSpringTotalForce = Coord::ZERO;
         counterIdx = 0;
+
+        energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
 
         WATCH_RW(virtualSpringTotalForce.x);
         WATCH_RW(virtualSpringTotalForce.y);
@@ -54,6 +59,11 @@ void VirtualSpringMobility::initialize(int stage)
             dir.normalize();
             addVirtualSpring(dir, dblrand() * 15);
         }*/
+        powerConsumption = calculateTotalMotorConsumption();
+        energySource->addEnergyConsumer(this);
+    }
+    else if (stage == INITSTAGE_LAST) {
+
     }
 }
 
@@ -118,6 +128,7 @@ void VirtualSpringMobility::move()
     //    speed = Coord::ZERO;
     //}
 
+    drainEnergyByAllMotors();
 }
 
 Coord VirtualSpringMobility::getRadentFrictionTotalForces(Coord acc) {
@@ -339,24 +350,35 @@ void VirtualSpringMobility::updateTotalForce(void) {
 }
 
 double VirtualSpringMobility::calculateAngle(Coord a, Coord b, Coord c) {
-        double vABx, vABy, vABz, vCBx, vCBy, vCBz, tmp1,tmp2;
+    double vABx, vABy, vABz, vCBx, vCBy, vCBz, tmp1,tmp2;
 
-        vABx = a.x - b.x;
-        vABy = a.y - b.y;
-        vABz = a.z - b.z;
-        vCBx = c.x - b.x;
-        vCBy = c.y - b.y;
-        vCBz = c.z - b.z;
+    vABx = a.x - b.x;
+    vABy = a.y - b.y;
+    vABz = a.z - b.z;
+    vCBx = c.x - b.x;
+    vCBy = c.y - b.y;
+    vCBz = c.z - b.z;
 
-        tmp1 = vABx*vCBx + vABy*vCBy + vABz*vCBz;
-        tmp2 = sqrt(((vABx*vABx) + (vABy*vABy) + (vABz*vABz)) * ((vCBx*vCBx) + (vCBy*vCBy) + (vCBz*vCBz)));
+    tmp1 = vABx*vCBx + vABy*vCBy + vABz*vCBz;
+    tmp2 = sqrt(((vABx*vABx) + (vABy*vABy) + (vABz*vABz)) * ((vCBx*vCBx) + (vCBy*vCBy) + (vCBz*vCBz)));
 
-        if(tmp2 != 0) {
-            return acos(tmp1/tmp2);
-        }
-        else {
-            return 0;
-        }
+    if(tmp2 != 0) {
+        return acos(tmp1/tmp2);
     }
+    else {
+        return 0;
+    }
+}
+
+W VirtualSpringMobility::calculateTotalMotorConsumption(void) {
+    return (4.0 * motorConsumption);
+}
+
+void VirtualSpringMobility::drainEnergyByAllMotors(void) {
+    powerConsumption = calculateTotalMotorConsumption();
+
+
+    emit(powerConsumptionChangedSignal, powerConsumption.get());
+}
 
 } /* namespace inet */

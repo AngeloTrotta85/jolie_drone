@@ -152,6 +152,9 @@ public:
     virtual void takeSnapshot(void);
     virtual void executeImageRecognition(void);
 
+    virtual J getResidualEnergy(void);
+    virtual double getResidualEnergyPercentage(void);
+
 
   public:
     UdpBasicAppDrone() {}

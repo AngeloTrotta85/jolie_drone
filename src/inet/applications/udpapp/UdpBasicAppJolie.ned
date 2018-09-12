@@ -64,9 +64,9 @@ simple UdpBasicAppJolie like IApp
         string gatewayRealAddress = default("192.168.1.176"); // address of the gateway
         int gatewayRealAddressPort = default(5683); // address port of the gateway
         string droneRegisterStringTemplate = default("{\"address\":\"%s:%d\",\"id\":%d}"); 									// template for the drone-register template message; 	example: {"address":"192.168.1.176:5683","id":0}                     
-        string dronePositionStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 	// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
-        string droneEnergyStringTemplate = default("{\"drone\":{\"id\":%d},\"energy\":{\"residual\":%.02lf}}"); 			// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"residual":2.5}}
-        string droneAlertStringTemplate = default("{\"drone\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 		// template for the drone-alert template message;   	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
+        string dronePositionStringTemplate = default("{\"uav\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 	// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
+        string droneEnergyStringTemplate = default("{\"uav\":{\"id\":%d},\"energy\":{\"percentage\":%.02lf}}"); 			// template for the drone-position template message; 	example: {"drone":{"id":0},"position":{"residual":2.5}}
+        string droneAlertStringTemplate = default("{\"uav\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf}}"); 		// template for the drone-alert template message;   	example: {"drone":{"id":0},"position":{"x":20.05,"y":42.65}}
         
         double neigh_timeout = default(10);	// neighors timeout                                      
         

@@ -29,6 +29,8 @@
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
+#include "inet/power/storage/SimpleEpEnergyStorage.h"
+
 namespace inet {
 
 using namespace inet::power;
@@ -67,6 +69,8 @@ void UdpBasicAppDrone::initialize(int stage)
         actual_spring_distance = 80;
         lastSentPosition = Coord::ZERO;
         lastSentEnergy = -1;
+        WATCH(lastSentEnergy);
+        WATCH(lastSentPosition);
 
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -91,8 +95,10 @@ void UdpBasicAppDrone::initialize(int stage)
         selfMobility_selfMsg = new cMessage("mobility_self");
         scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
     }
-    else if (stage == INITSTAGE_LAST) {
+    else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT) {
         energySource->addEnergyConsumer(this);
+    }
+    else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
         gatewayIpAddress = Ipv4Address::UNSPECIFIED_ADDRESS;
     }
@@ -416,12 +422,16 @@ void UdpBasicAppDrone::sendUpdatePosition(void) {
 
 void UdpBasicAppDrone::sendUpdateEnergy(void) {
     //check to send the energy
-    double actEnergy = 0;
+    //SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
+    //double actEnergy = es->getResidualEnergyCapacity().get(); //static_cast<SimpleEpEnergyStorage *>(energySource)->getResidualEnergyCapacity().get();
+    //double actEnergy = getResidualEnergy().get();
+    double actEnergy = getResidualEnergyPercentage();
+
 
     if (    (lastSentEnergy < 0) ||
             (fabs(actEnergy - lastSentEnergy) > thresholdEnergyUpdate) ) {
         energyUAV_update();
-        lastSentEnergy = 0;
+        lastSentEnergy = actEnergy;
     }
     //positionUAV_update();
 }
@@ -605,6 +615,16 @@ void UdpBasicAppDrone::positionUAV_update(void) {
     socket.sendTo(packet, destAddr, destPort);
 }
 
+J UdpBasicAppDrone::getResidualEnergy(void) {
+    SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
+    return es->getResidualEnergyCapacity();
+}
+
+double UdpBasicAppDrone::getResidualEnergyPercentage(void){
+    SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
+    return ((es->getResidualEnergyCapacity().get() / es->getNominalEnergyCapacity().get()) * 100.0);
+}
+
 void UdpBasicAppDrone::energyUAV_update(void) {
     char msgName[64];
     sprintf(msgName, "UDPBasicAppDroneEnergy-%d", myAppAddr);
@@ -620,7 +640,8 @@ void UdpBasicAppDrone::energyUAV_update(void) {
 
     payload->setDrone_appAddr(myAppAddr);
     payload->setDrone_ipAddr(myIPAddr);
-    payload->setResidual(0);  //TODO
+    //payload->setResidual(getResidualEnergy().get());
+    payload->setResidual(getResidualEnergyPercentage());
 
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();

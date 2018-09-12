@@ -989,7 +989,7 @@ void UdpBasicAppJolie::sendEnergySingleUAV_CoAP(int idDrone, double residual) {
     //const char*       server_uri = "coap://192.168.1.177/register";
     char              server_uri[64];
 
-    snprintf(server_uri, sizeof(server_uri), "coap://%s/position", jolieAddress);
+    snprintf(server_uri, sizeof(server_uri), "coap://%s/energy", jolieAddress);
 
     /* Prepare coap socket*/
     coap_address_init(&src_addr);

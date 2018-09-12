@@ -16,6 +16,7 @@
 package inet.mobility.single;
 
 import inet.mobility.base.MovingMobilityBase;
+import inet.power.contract.IEnergyConsumer;
 
 //
 // This is a linear mobility model with speed, angle and acceleration parameters.
@@ -24,7 +25,7 @@ import inet.mobility.base.MovingMobilityBase;
 //
 // @author Angelo Trotta - trotta@cs.unibo.it
 //
-simple VirtualSpringMobility extends MovingMobilityBase
+simple VirtualSpringMobility extends MovingMobilityBase like IEnergyConsumer
 {
     parameters:
         double initialX @unit(m) = default(uniform(this.constraintAreaMinX, this.constraintAreaMaxX));
@@ -37,6 +38,9 @@ simple VirtualSpringMobility extends MovingMobilityBase
         double maxacceleration = default(1); // acceleration of linear motion (m/s2)
         double maxspeed @unit(mps) = default(1 mps); // speed of the host (in m/s)
         
+        string energySourceModule = default("");           // module path of the energy source module which provides energy to the motors
+        
+        double motorConsumption @unit(W) = default(24W);
         
         double staticFrictionCoefficient = default(0.5); //  static friction coefficient
         double kineticFrictionCoefficient = default(0.3); //  dynamic friction coefficient

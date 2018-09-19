@@ -64,6 +64,7 @@ void UdpBasicAppDrone::initialize(int stage)
         mobility_timeout = par("mobility_timeout");
         thresholdPositionUpdate = par("thresholdPositionUpdate");
         thresholdEnergyUpdate = par("thresholdEnergyUpdate");
+        uavImageSize = par("uavImageSize");
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
@@ -88,6 +89,8 @@ void UdpBasicAppDrone::initialize(int stage)
         selfMsg = new cMessage("sendTimer");
 
         selfPosition_selfMsg = new cMessage("selfPosition_selfMsg");
+
+        periodicMsg = new cMessage("periodicMsg_selfMsg");
 
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
@@ -311,8 +314,12 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
     else if (msg == selfPosition_selfMsg) {
         sendUpdatePosition();
         sendUpdateEnergy();
-        checkAlert();
+        //checkAlert();
         scheduleAt(simTime() + 1, selfPosition_selfMsg);
+    }
+    else if (msg == periodicMsg) {
+        periodicPolicy();
+        scheduleAt(simTime() + extra_period, periodicMsg);
     }
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
@@ -397,8 +404,19 @@ void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l
 void UdpBasicAppDrone::checkAlert(void) {
     if (getMyState() == DS_COVER) {
         if ((simTime() > 30.5) && (simTime() < 31.5) && (myAppAddr == 0)) {
-            alertUAV_send();
+            alertUAV_send(80, "vehicle");
         }
+    }
+}
+
+void UdpBasicAppDrone::periodicPolicy(void) {
+    if (getMyState() == DS_IMAGE) {
+        takeSnapshot();
+        imageUAV_send();
+    }
+    else if (getMyState() == DS_DETECT) {
+        executeImageRecognition();
+        alertUAV_send(99, "zingaro");
     }
 }
 
@@ -489,6 +507,12 @@ void UdpBasicAppDrone::updateMobility(void) {
         else if (getMyState() == DS_STOP) {
             addVirtualSpringToMobility(stop_point, stop_spring_distance, stop_spring_stiffness);
         }
+        else if (getMyState() == DS_DETECT) {
+            //addVirtualSpringToMobility(extra_point, extra_spring_distance, extra_spring_stiffness);
+        }
+        else if (getMyState() == DS_IMAGE) {
+            addVirtualSpringToMobility(extra_point, extra_spring_distance, extra_spring_stiffness);
+        }
     }
 }
 
@@ -534,6 +558,17 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] received a new policy. Policy ID: "<< appmsg->getP_id() << endl << std::flush;
 
+    cancelEvent(periodicMsg);
+
+    initPolicyVariables();
+
+    if (appmsg->getA_id() == A_DETECT) {
+        extra_period = appmsg->get
+    }
+    else if (appmsg->getA_id() == A_IMAGE) {
+
+    }
+
     int policy_id = appmsg->getP_id();
     switch (policy_id) {
     case P_COVER:
@@ -554,6 +589,24 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
         focus_point = appmsg->getPosition();
         focus_spring_stiffness = appmsg->getStiffness();
         focus_spring_distance = appmsg->getDistance();
+        break;
+
+    case P_DETECT:
+        setMyState(DS_DETECT);
+        extra_point = appmsg->getPosition();
+        extra_spring_stiffness = appmsg->getStiffness();
+        extra_spring_distance = appmsg->getDistance();
+        extra_period = appmsg->getPeriod();
+        scheduleAt(simTime(), periodicMsg);
+        break;
+
+    case P_IMAGE:
+        setMyState(DS_IMAGE);
+        extra_point = appmsg->getPosition();
+        extra_spring_stiffness = appmsg->getStiffness();
+        extra_spring_distance = appmsg->getDistance();
+        extra_period = appmsg->getPeriod();
+        scheduleAt(simTime(), periodicMsg);
         break;
 
     default:
@@ -646,13 +699,13 @@ void UdpBasicAppDrone::energyUAV_update(void) {
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
 
-    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the energy: " << 0 << endl << std::flush;
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the energy: " << payload->getResidual() << endl << std::flush;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
 }
 
-void UdpBasicAppDrone::alertUAV_send(void) {
+void UdpBasicAppDrone::alertUAV_send(double acc, const char *classe) {
     char msgName[64];
     sprintf(msgName, "UDPBasicAppDroneAlert-%d", myAppAddr);
 
@@ -668,11 +721,42 @@ void UdpBasicAppDrone::alertUAV_send(void) {
     payload->setDrone_appAddr(myAppAddr);
     payload->setDrone_ipAddr(myIPAddr);
     payload->setPosition(mob->getCurrentPosition());
+    payload->setAccuracy(acc);
+    payload->setClasse(classe);
 
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
 
-    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the alert: " << mob->getCurrentPosition() << endl << std::flush;
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the alert: "
+            << mob->getCurrentPosition()
+            << " - Class: " << classe << " - Accuracy: " << acc
+            << endl << std::flush;
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
+void UdpBasicAppDrone::imageUAV_send(void) {
+    char msgName[64];
+    sprintf(msgName, "UDPBasicAppDroneImage-%d", myAppAddr);
+
+    long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + uavImageSize;
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDroneImage>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+    payload->setPosition(mob->getCurrentPosition());
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image: " << mob->getCurrentPosition() << endl << std::flush;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);

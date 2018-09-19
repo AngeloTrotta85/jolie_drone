@@ -23,11 +23,9 @@ namespace inet;
 //
 // TODO generated message class
 //
-class ApplicationDroneAlert extends FieldsChunk {
+class ApplicationDroneImage extends FieldsChunk {
 	int drone_appAddr;
 	Ipv4Address drone_ipAddr;
 
 	Coord position;
-	string classe;
-	double accuracy;
 }

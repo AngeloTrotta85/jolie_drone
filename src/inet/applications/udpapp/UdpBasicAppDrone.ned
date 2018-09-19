@@ -63,6 +63,7 @@ simple UdpBasicAppDrone like IApp, IEnergyConsumer
         double neigh_timeout = default(10);	// neighors timeout
         double thresholdPositionUpdate @unit(m) = default(1m); // threshold to send position update
         double thresholdEnergyUpdate = default(1); // threshold to send Energy update
+        int uavImageSize @unit(B) = default(1MB);
         
         //string energyConsumerType = default(""); // NED type of the energy consumer model
         string energySourceModule = default("");           // module path of the energy source module which provides energy to the radio

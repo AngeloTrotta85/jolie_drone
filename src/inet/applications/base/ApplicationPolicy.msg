@@ -20,6 +20,16 @@ import inet.networklayer.contract.ipv4.Ipv4Address;
 
 namespace inet;
 
+struct SpringForce
+{
+    int s_id;
+    char s_name[32];
+    
+    double distance;
+    Coord position;
+    double stiffness;
+};
+
 //
 // TODO generated message class
 //
@@ -29,8 +39,13 @@ class ApplicationPolicy extends FieldsChunk {
 	
 	int p_id;
 	char p_name[32];
+	
 	int drone_id;
-	double distance;
-	Coord position;
-	double stiffness;
+	
+	int a_id;
+	char a_name[32];    
+    double a_period;
+	
+	SpringForce springs[3];
+	
 }

@@ -34,6 +34,7 @@
 #include "../base/ApplicationDroneAlert_m.h"
 #include "../base/ApplicationDronePosition_m.h"
 #include "../base/ApplicationDroneRegister_m.h"
+#include "../base/ApplicationDroneImage_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 #include "inet/power/contract/IEpEnergyConsumer.h"
@@ -52,7 +53,9 @@ public:
     enum DroneState {
         DS_COVER = 1,
         DS_STOP = 2,
-        DS_FOCUS = 3
+        DS_FOCUS = 3,
+        DS_DETECT = 4,
+        DS_IMAGE = 5
     };
 
   protected:
@@ -67,6 +70,7 @@ public:
     const char *packetName = nullptr;
     double neigh_timeout;
     double mobility_timeout;
+    int uavImageSize;
 
     // state
     UdpSocket socket;
@@ -91,14 +95,24 @@ public:
 
     double actual_spring_stiffness;
     double actual_spring_distance;
+    bool actual_spring_isActive;
 
     Coord focus_point;
     double focus_spring_stiffness;
     double focus_spring_distance;
+    bool focus_spring_isActive;
 
     Coord stop_point;
     double stop_spring_stiffness;
     double stop_spring_distance;
+    bool stop_spring_isActive;
+
+    Coord extra_point;
+    double extra_spring_stiffness;
+    double extra_spring_distance;
+    bool extra_spring_isActive;
+    double extra_period;
+    cMessage *periodicMsg = nullptr;
 
     Coord lastSentPosition;
     double thresholdPositionUpdate;
@@ -140,8 +154,10 @@ public:
     virtual void registerUAV_init(void);
     virtual void positionUAV_update(void);
     virtual void energyUAV_update(void);
-    virtual void alertUAV_send(void);
+    virtual void alertUAV_send(double acc, const char *classe);
+    virtual void imageUAV_send(void);
 
+    void periodicPolicy(void);
     void msg1sec_call(void);
     void updateMobility(void);
     void sendUpdatePosition(void);

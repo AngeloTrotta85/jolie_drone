@@ -44,12 +44,22 @@
 #include "../base/ApplicationDronePosition_m.h"
 #include "../base/ApplicationDroneEnergy_m.h"
 #include "../base/ApplicationDroneRegister_m.h"
+#include "../base/ApplicationDroneImage_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
 #define P_COVER 1
 #define P_STOP 2
 #define P_FOCUS 3
+
+#define A_NONE 1
+#define A_DETECT 2
+#define A_IMAGE 3
+
+#define SPRING_COVER_IDX 0
+#define SPRING_STOP_IDX 1
+#define SPRING_FOCUS_IDX 2
+
 /*
 typedef struct {
   size_t length;    // length of string
@@ -58,6 +68,64 @@ typedef struct {
 */
 
 namespace inet {
+
+/*
+class Policy {
+public:
+    typedef struct spring {
+        int s_id;
+        char s_name[32];
+
+        double distance;
+        Coord position;
+        double stiffness;
+
+        double period;
+    } spring;
+
+public:
+    int p_id;
+    char p_name[32];
+
+    std::list <spring> springs;
+
+    int a_id;
+    char a_name[32];
+
+    int uav_id;
+
+public:
+    Policy() {
+        p_id = -1;
+        sprintf(p_name, "");
+
+        a_id = -1;
+        sprintf(a_name, "");
+
+        uav_id = -1;
+    };
+
+    friend std::ostream& operator<< (std::ostream& stream, const Policy& pol) {
+        stream
+                << "Policy ID: " << pol.p_id << "; "
+                << "Policy name: " << pol.p_name << "; "
+                << "Action ID: " << pol.a_id << "; "
+                << "Action name: " << pol.a_name << "; "
+                << "drone ID: " << pol.uav_id << "; ";
+        for (auto& s : pol.springs) {
+            stream
+                << "Spring ID: " << s.s_id << "; "
+                << "Spring name: " << s.s_name << "; "
+                << "distance: " << s.distance << "; "
+                << "position: " << s.position << "; "
+                << "stiffness: " << s.stiffness << "; "
+                << "period: " << s.period;
+        }
+        return stream;
+    };
+};
+*/
+
 
 /**
  * UDP application. See NED for more info.
@@ -73,23 +141,58 @@ public:
         bool isGW;
     } neigh_info_t;
 
-    typedef struct policy {
-        int p_id;
-        char p_name[32];
-        int drone_id;
+    typedef struct spring {
+        int s_id;
+        char s_name[32];
+
         double distance;
         Coord position;
         double stiffness;
+    } spring;
+
+    typedef struct policy {
+        int p_id;
+        char p_name[32];
+
+        int drone_id;
+
+        int a_id;
+        char a_name[32];
+        double a_period;
+
+        spring springs[3];
+
+        policy() {
+            p_id = drone_id = a_id = -1;
+            p_name[0] = 0;
+            a_name[0] = 0;
+            for (auto& s : springs) {
+                s.s_id = -1;
+                s.s_name[0] = 0;
+                s.distance = s.stiffness = s.period = 0;
+                s.position = Coord(0, 0);
+            }
+        }
+
     } policy;
 
     friend std::ostream& operator<< (std::ostream& stream, const policy& pol) {
-        return stream
+        stream
                 << "Policy ID: " << pol.p_id << "; "
                 << "Policy name: " << pol.p_name << "; "
-                << "drone ID: " << pol.drone_id << "; "
-                << "distance: " << pol.distance << "; "
-                << "position: " << pol.position << "; "
-                << "stiffness: " << pol.stiffness;
+                << "Action ID: " << pol.a_id << "; "
+                << "Action name: " << pol.a_name << "; "
+                << "drone ID: " << pol.drone_id << "; ";
+        for (auto& s : pol.springs) {
+            stream
+                << "Spring ID: " << s.s_id << "; "
+                << "Spring name: " << s.s_name << "; "
+                << "distance: " << s.distance << "; "
+                << "position: " << s.position << "; "
+                << "stiffness: " << s.stiffness << "; "
+                << "period: " << s.period;
+        }
+        return stream;
     }
 
 protected:
@@ -109,6 +212,8 @@ protected:
     const char *dronePositionStringTemplate = nullptr;
     const char *droneEnergyStringTemplate = nullptr;
     const char *droneAlertStringTemplate = nullptr;
+    const char *droneImageStringTemplateP1 = nullptr;
+    const char *droneImageStringTemplateP2 = nullptr;
 
     // address in the REAL world
     const char *jolieAddress = nullptr;
@@ -181,6 +286,9 @@ protected:
     void manageNewPosition(Packet *pk);
     void manageNewEnergy(Packet *pk);
     void manageNewAlert(Packet *pk);
+    void manageNewImage(Packet *pk);
+
+    void loadImageFromFile(std::stringstream &ss);
 
     virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);
@@ -189,7 +297,8 @@ protected:
     void registerSingleUAV_CoAP(int idDrone);
     void sendPositionSingleUAV_CoAP(int idDrone, double x, double y);
     void sendEnergySingleUAV_CoAP(int idDrone, double residual);
-    void sendAlertSingleUAV_CoAP(int idDrone, double x, double y);
+    void sendAlertSingleUAV_CoAP(int idDrone, double x, double y, double acc, const char *classe);
+    void sendImageSingleUAV_CoAP(int idDrone, double x, double y);
 
 public:
     UdpBasicAppJolie() {}

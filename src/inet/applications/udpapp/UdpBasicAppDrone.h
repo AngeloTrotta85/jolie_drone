@@ -107,11 +107,8 @@ public:
     double stop_spring_distance;
     bool stop_spring_isActive;
 
-    Coord extra_point;
-    double extra_spring_stiffness;
-    double extra_spring_distance;
-    bool extra_spring_isActive;
-    double extra_period;
+    double action_period;
+    int action_type;
     cMessage *periodicMsg = nullptr;
 
     Coord lastSentPosition;
@@ -150,6 +147,7 @@ public:
     virtual Packet *createBeaconPacket();
 
     virtual void manageNewPolicy(Packet *pk);
+    virtual void initPolicyVariables(void);
 
     virtual void registerUAV_init(void);
     virtual void positionUAV_update(void);
@@ -162,7 +160,6 @@ public:
     void updateMobility(void);
     void sendUpdatePosition(void);
     void sendUpdateEnergy(void);
-    void checkAlert(void);
     void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness);
 
     virtual void takeSnapshot(void);

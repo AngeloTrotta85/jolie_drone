@@ -23,7 +23,8 @@ namespace inet;
 struct SpringForce
 {
     int s_id;
-    char s_name[32];
+    //char s_name[32];
+    string s_name;
     
     double distance;
     Coord position;
@@ -38,12 +39,14 @@ class ApplicationPolicy extends FieldsChunk {
 	Ipv4Address dest_ipAddr;
 	
 	int p_id;
-	char p_name[32];
+	//char p_name[32];
+	string p_name;
 	
 	int drone_id;
 	
 	int a_id;
-	char a_name[32];    
+	//char a_name[32]; 
+	string a_name;   
     double a_period;
 	
 	SpringForce springs[3];

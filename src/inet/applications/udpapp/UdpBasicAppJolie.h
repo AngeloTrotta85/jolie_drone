@@ -166,10 +166,11 @@ public:
             p_id = drone_id = a_id = -1;
             p_name[0] = 0;
             a_name[0] = 0;
+            a_period = 0;
             for (auto& s : springs) {
                 s.s_id = -1;
                 s.s_name[0] = 0;
-                s.distance = s.stiffness = s.period = 0;
+                s.distance = s.stiffness = 0;
                 s.position = Coord(0, 0);
             }
         }
@@ -182,6 +183,7 @@ public:
                 << "Policy name: " << pol.p_name << "; "
                 << "Action ID: " << pol.a_id << "; "
                 << "Action name: " << pol.a_name << "; "
+                << "Action period: " << pol.a_period << "; "
                 << "drone ID: " << pol.drone_id << "; ";
         for (auto& s : pol.springs) {
             stream
@@ -189,8 +191,7 @@ public:
                 << "Spring name: " << s.s_name << "; "
                 << "distance: " << s.distance << "; "
                 << "position: " << s.position << "; "
-                << "stiffness: " << s.stiffness << "; "
-                << "period: " << s.period;
+                << "stiffness: " << s.stiffness;
         }
         return stream;
     }

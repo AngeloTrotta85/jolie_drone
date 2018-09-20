@@ -319,7 +319,7 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
     }
     else if (msg == periodicMsg) {
         periodicPolicy();
-        scheduleAt(simTime() + extra_period, periodicMsg);
+        scheduleAt(simTime() + action_period, periodicMsg);
     }
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
@@ -401,20 +401,12 @@ void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l
     }
 }
 
-void UdpBasicAppDrone::checkAlert(void) {
-    if (getMyState() == DS_COVER) {
-        if ((simTime() > 30.5) && (simTime() < 31.5) && (myAppAddr == 0)) {
-            alertUAV_send(80, "vehicle");
-        }
-    }
-}
-
 void UdpBasicAppDrone::periodicPolicy(void) {
-    if (getMyState() == DS_IMAGE) {
+    if (action_type == A_IMAGE) {
         takeSnapshot();
         imageUAV_send();
     }
-    else if (getMyState() == DS_DETECT) {
+    else if (action_type == A_DETECT) {
         executeImageRecognition();
         alertUAV_send(99, "zingaro");
     }
@@ -461,20 +453,22 @@ void UdpBasicAppDrone::updateMobility(void) {
         // clear everything
         vmob->clearVirtualSprings();
 
-        for (auto& n : neighMap) {
+        if (actual_spring_isActive) {
 
-            if (n.second.size() > 0) {
-                UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+            for (auto& n : neighMap) {
 
-                //if ((ni->isGW) && (ni->uavReferee != myAppAddr)) continue; // remove the gateway
-                if (ni->isGW) continue; // remove the gateway
+                if (n.second.size() > 0) {
+                    UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
 
-                //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
-                Coord neighPos = ni->info.mob_position;
+                    //if ((ni->isGW) && (ni->uavReferee != myAppAddr)) continue; // remove the gateway
+                    if (ni->isGW) continue; // remove the gateway
 
-                addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+                    //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
+                    Coord neighPos = ni->info.mob_position;
 
-                /*double distance = neighPos.distance(myPos);
+                    addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+
+                    /*double distance = neighPos.distance(myPos);
 
                 double springDispl = actual_spring_distance - distance;
 
@@ -482,36 +476,32 @@ void UdpBasicAppDrone::updateMobility(void) {
                 uVec.normalize();
 
                 vmob->addVirtualSpring(uVec, actual_spring_stiffness, actual_spring_distance, springDispl);*/
+                }
             }
-        }
 
-        for (auto& n : neighMap) {
-            if (n.second.size() > 0) {
-                UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
-                if (ni->isGW) {
-                    if (ni->uavReferee == myAppAddr) {
-                        Coord neighPos = ni->info.mob_position;
-                        double distance = neighPos.distance(mob->getCurrentPosition());
-                        if (distance > actual_spring_distance) {
-                            addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+            for (auto& n : neighMap) {
+                if (n.second.size() > 0) {
+                    UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+                    if (ni->isGW) {
+                        if (ni->uavReferee == myAppAddr) {
+                            Coord neighPos = ni->info.mob_position;
+                            double distance = neighPos.distance(mob->getCurrentPosition());
+                            if (distance > actual_spring_distance) {
+                                addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+                            }
                         }
+                        break;
                     }
-                    break;
                 }
             }
         }
 
-        if (getMyState() == DS_FOCUS) {
+        if (focus_spring_isActive) {
             addVirtualSpringToMobility(focus_point, focus_spring_distance, focus_spring_stiffness);
         }
-        else if (getMyState() == DS_STOP) {
+
+        if (stop_spring_isActive) {
             addVirtualSpringToMobility(stop_point, stop_spring_distance, stop_spring_stiffness);
-        }
-        else if (getMyState() == DS_DETECT) {
-            //addVirtualSpringToMobility(extra_point, extra_spring_distance, extra_spring_stiffness);
-        }
-        else if (getMyState() == DS_IMAGE) {
-            addVirtualSpringToMobility(extra_point, extra_spring_distance, extra_spring_stiffness);
         }
     }
 }
@@ -558,18 +548,35 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] received a new policy. Policy ID: "<< appmsg->getP_id() << endl << std::flush;
 
-    cancelEvent(periodicMsg);
-
     initPolicyVariables();
 
-    if (appmsg->getA_id() == A_DETECT) {
-        extra_period = appmsg->get
+    if ((appmsg->getA_id() == A_DETECT) || (appmsg->getA_id() == A_IMAGE)) {
+        action_period = appmsg->getA_period();
+        action_type = appmsg->getA_id();
+        scheduleAt(simTime(), periodicMsg);
     }
-    else if (appmsg->getA_id() == A_IMAGE) {
 
+    if (appmsg->getSprings(SPRING_COVER_IDX).s_id == P_COVER) {
+        actual_spring_isActive = true;
+        actual_spring_stiffness = appmsg->getSprings(SPRING_COVER_IDX).stiffness;
+        actual_spring_distance = appmsg->getSprings(SPRING_COVER_IDX).distance;
     }
 
-    int policy_id = appmsg->getP_id();
+    if (appmsg->getSprings(SPRING_FOCUS_IDX).s_id == P_FOCUS) {
+        focus_spring_isActive = true;
+        focus_point = appmsg->getSprings(SPRING_STOP_IDX).position;
+        focus_spring_stiffness = appmsg->getSprings(SPRING_FOCUS_IDX).stiffness;
+        focus_spring_distance = appmsg->getSprings(SPRING_FOCUS_IDX).distance;
+    }
+
+    if (appmsg->getSprings(SPRING_STOP_IDX).s_id == P_STOP) {
+        stop_spring_isActive = true;
+        stop_point = appmsg->getSprings(SPRING_STOP_IDX).position;
+        stop_spring_stiffness = appmsg->getSprings(SPRING_STOP_IDX).stiffness;
+        stop_spring_distance = appmsg->getSprings(SPRING_STOP_IDX).distance;
+    }
+
+    /*int policy_id = appmsg->getP_id();
     switch (policy_id) {
     case P_COVER:
         setMyState(DS_COVER);
@@ -612,9 +619,31 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
     default:
         throw cRuntimeError("Unknown received policy. ID: %d", policy_id);
         break;
-    }
+    }*/
 
     delete pk;
+}
+
+void UdpBasicAppDrone::initPolicyVariables(void){
+
+    cancelEvent(periodicMsg);
+
+    actual_spring_stiffness = 0;
+    actual_spring_distance = 0;
+    actual_spring_isActive = false;
+
+    focus_point = Coord::ZERO;
+    focus_spring_stiffness = 0;
+    focus_spring_distance = 0;
+    focus_spring_isActive = false;
+
+    stop_point = Coord::ZERO;
+    stop_spring_stiffness = 0;
+    stop_spring_distance = 0;
+    stop_spring_isActive = false;
+
+    action_period = 0;
+    action_type = A_NONE;
 }
 
 void UdpBasicAppDrone::registerUAV_init(void) {

@@ -240,14 +240,34 @@ void UdpBasicAppJolie::send_policy_to_drone(policy *p) {
     creationTimeTag->setCreationTime(simTime());
 
     payload->setP_id(p->p_id);
-    payload->setDistance(p->distance);
+    payload->setP_name(p->p_name);
     payload->setDrone_id(p->drone_id);
-    payload->setPosition(p->position);
-    payload->setStiffness(p->stiffness);
-    for (int j = 0; j < (sizeof(p->p_name) / sizeof(char)); j++) {
-        payload->setP_name(j, p->p_name[j]);
+
+    payload->setA_id(p->a_id);
+    payload->setA_name(p->a_name);
+    payload->setA_period(p->a_period);
+
+    for (int jj = 0; jj < payload->getSpringsArraySize(); jj++) {
+        struct SpringForce newsp;
+
+        if (jj < 3) {
+            newsp.distance = p->springs[jj].distance;
+            newsp.position = p->springs[jj].position;
+            newsp.s_id = p->springs[jj].s_id;
+            newsp.s_name = p->springs[jj].s_name;
+            newsp.stiffness = p->springs[jj].stiffness;
+        }
+        else {
+            std::stringstream ss;
+            ss << p;
+            throw cRuntimeError("Error in sending the policy:\n %s", ss.str().c_str());
+        }
+
+        payload->setSprings(jj, newsp);
     }
-    payload->setPeriod(p->period);
+
+    payload->setDest_appAddr(p->drone_id);
+    payload->setDest_ipAddr(addressTable[p->drone_id]);
 
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
@@ -748,7 +768,14 @@ void UdpBasicAppJolie::manageReceivedPolicy(rapidjson::Document &doc) {
         }
 
         if (doc["action"].HasMember("parameters")) {
-
+            if (doc["action"]["parameters"].HasMember("period")) {
+                if (doc["action"]["parameters"]["period"].IsDouble()) {
+                    newPolicy.a_period = doc["action"]["parameters"]["period"].GetDouble();
+                }
+                else {
+                    parseOK = false;
+                }
+            }
         }
     }
     else {
@@ -790,7 +817,7 @@ void UdpBasicAppJolie::manageReceivedPolicy(rapidjson::Document &doc) {
                     parseOK = false;
                 }
 
-                if (parseOK) {
+                if (idxVect >= 0) {
                     if (s.HasMember("name")) {
                         if (s["name"].IsString()) {
                             memset(newPolicy.springs[idxVect].s_name, 0, sizeof(newPolicy.springs[idxVect].s_name));

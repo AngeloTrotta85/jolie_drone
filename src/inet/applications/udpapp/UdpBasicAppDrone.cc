@@ -65,6 +65,15 @@ void UdpBasicAppDrone::initialize(int stage)
         thresholdPositionUpdate = par("thresholdPositionUpdate");
         thresholdEnergyUpdate = par("thresholdEnergyUpdate");
         uavImageSize = par("uavImageSize");
+        detectionTime = par("detectionTime");
+
+        alarmTime = par("alarmTime");
+        double alarmPositionX = par("alarmPositionX");
+        double alarmPositionY = par("alarmPositionY");
+        alarmPosition = Coord(alarmPositionX, alarmPositionY);
+        alarmGaussDeviationDistance = par("alarmGaussDeviationDistance");
+        alarmMaxAccuracy = par("alarmMaxAccuracy");
+        alarmGaussDeviationMax = par("alarmGaussDeviationMax");
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
@@ -91,6 +100,7 @@ void UdpBasicAppDrone::initialize(int stage)
         selfPosition_selfMsg = new cMessage("selfPosition_selfMsg");
 
         periodicMsg = new cMessage("periodicMsg_selfMsg");
+        periodicExecutionMsg = new cMessage("periodicExecutionMsg_selfMsg");
 
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
@@ -104,6 +114,11 @@ void UdpBasicAppDrone::initialize(int stage)
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
         gatewayIpAddress = Ipv4Address::UNSPECIFIED_ADDRESS;
+
+        //for (int i = 0; i < 20; i++) {
+            //std::cout << "Parameter detectionTime: " << truncnormal(detectionTime, 0.1) << endl;
+            //sleep(1);
+        //}
     }
 
     //std::cout << "UdpBasicAppDrone::initialize END - Stage " << stage << std::flush << endl;
@@ -318,8 +333,17 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
         scheduleAt(simTime() + 1, selfPosition_selfMsg);
     }
     else if (msg == periodicMsg) {
-        periodicPolicy();
-        scheduleAt(simTime() + action_period, periodicMsg);
+        if (!periodicExecutionMsg->isScheduled()) {
+            //cancelEvent(periodicMsg);
+            //periodicExecutionMsg->ge
+            //scheduleAt(simTime() + time + 0.01, periodicMsg);
+
+            periodicPolicy();
+            scheduleAt(simTime() + action_period, periodicMsg);
+        }
+    }
+    else if (msg == periodicExecutionMsg) {
+        endImageRecognition();
     }
     else if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
@@ -408,7 +432,7 @@ void UdpBasicAppDrone::periodicPolicy(void) {
     }
     else if (action_type == A_DETECT) {
         executeImageRecognition();
-        alertUAV_send(99, "zingaro");
+        //alertUAV_send(99, "zingaro");
     }
 }
 
@@ -627,6 +651,7 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
 void UdpBasicAppDrone::initPolicyVariables(void){
 
     cancelEvent(periodicMsg);
+    cancelEvent(periodicExecutionMsg);
 
     actual_spring_stiffness = 0;
     actual_spring_distance = 0;
@@ -712,6 +737,7 @@ void UdpBasicAppDrone::energyUAV_update(void) {
     sprintf(msgName, "UDPBasicAppDroneEnergy-%d", myAppAddr);
 
     long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + (2.0 * sizeof(double));
+    //long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + uavImageSize;
 
     Packet *packet = new Packet(msgName);
 
@@ -770,6 +796,7 @@ void UdpBasicAppDrone::imageUAV_send(void) {
     sprintf(msgName, "UDPBasicAppDroneImage-%d", myAppAddr);
 
     long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + uavImageSize;
+    //long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + 4;
 
     Packet *packet = new Packet(msgName);
 
@@ -815,19 +842,52 @@ void UdpBasicAppDrone::handleNodeCrash()
 }
 
 void UdpBasicAppDrone::takeSnapshot(void) {
-    powerConsumption = W(2); // = computePowerConsumption();
+    powerConsumption = W(1); // = computePowerConsumption();
 
 
     emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 void UdpBasicAppDrone::executeImageRecognition(void) {
-    powerConsumption = W(2); // = computePowerConsumption();
+    double time = truncnormal(detectionTime, 0.1);
 
+    if (!periodicMsg->isScheduled()) {
+        //cancelEvent(periodicMsg);
+        scheduleAt(simTime() + 0.01, periodicMsg);
+    }
+
+    scheduleAt(simTime() + time, periodicExecutionMsg);
+    //periodicExecutionMsg
+
+    powerConsumption = W(1); // = computePowerConsumption();
 
     emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
+void UdpBasicAppDrone::endImageRecognition(void) {
+    double confidence;
+    char classe[64];
+    //scheduleAt(simTime() + truncnormal(detectionTime, 0.1), periodicExecutionMsg);
+
+    powerConsumption = W(0); // = computePowerConsumption();
+
+    memset(classe, 0, sizeof(classe));
+    detectAlarm(mob->getCurrentPosition(), confidence, classe, sizeof(classe));
+
+    alertUAV_send(confidence, classe);
+
+    emit(powerConsumptionChangedSignal, powerConsumption.get());
+}
+
+void UdpBasicAppDrone::detectAlarm(Coord actPos, double &conf, char *buff, int buffSize) {
+    /*alarmTime = par("alarmTime");
+            double alarmPositionX = par("alarmPositionX");
+            double alarmPositionY = par("alarmPositionY");
+            alarmPosition = Coord(alarmPositionX, alarmPositionY);
+            alarmGaussDeviationDistance = par("alarmGaussDeviationDistance");
+            alarmMaxAccuracy = par("alarmMaxAccuracy");
+            alarmGaussDeviationMax = par("alarmGaussDeviationMax");*/
+}
 
 } // namespace inet
 

@@ -19,6 +19,10 @@
 #ifndef __INET_UDPBASICAPPJOLIE_H
 #define __INET_UDPBASICAPPJOLIE_H
 
+//#ifndef COAP_MAX_PDU_SIZE
+//#define COAP_MAX_PDU_SIZE      165000 /* maximum size of a CoAP PDU */
+//#endif /* COAP_MAX_PDU_SIZE */
+
 #include <inet/common/INETDefs.h>
 
 #include <coap.h>
@@ -53,8 +57,8 @@
 #define P_FOCUS 3
 
 #define A_NONE 1
-#define A_DETECT 2
-#define A_IMAGE 3
+#define A_IMAGE 2
+#define A_DETECT 3
 
 #define SPRING_COVER_IDX 0
 #define SPRING_STOP_IDX 1
@@ -300,6 +304,7 @@ protected:
     void sendEnergySingleUAV_CoAP(int idDrone, double residual);
     void sendAlertSingleUAV_CoAP(int idDrone, double x, double y, double acc, const char *classe);
     void sendImageSingleUAV_CoAP(int idDrone, double x, double y);
+    //void sendBigImageSingleUAV_CoAP(int idDrone, double x, double y);
 
 public:
     UdpBasicAppJolie() {}

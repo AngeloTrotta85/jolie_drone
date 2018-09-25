@@ -19,6 +19,10 @@
 #ifndef __INET_UDPBASICAPPDRONE_H
 #define __INET_UDPBASICAPPDRONE_H
 
+//#ifndef COAP_MAX_PDU_SIZE
+//#define COAP_MAX_PDU_SIZE      165000 /* maximum size of a CoAP PDU */
+//#endif /* COAP_MAX_PDU_SIZE */
+
 #include <inet/common/INETDefs.h>
 
 #include <coap.h>
@@ -71,6 +75,13 @@ public:
     double neigh_timeout;
     double mobility_timeout;
     int uavImageSize;
+    double detectionTime;
+
+    simtime_t alarmTime;
+    Coord alarmPosition;
+    double alarmGaussDeviationDistance;
+    double alarmMaxAccuracy;
+    double alarmGaussDeviationMax;
 
     // state
     UdpSocket socket;
@@ -110,6 +121,7 @@ public:
     double action_period;
     int action_type;
     cMessage *periodicMsg = nullptr;
+    cMessage *periodicExecutionMsg = nullptr;
 
     Coord lastSentPosition;
     double thresholdPositionUpdate;
@@ -164,6 +176,8 @@ public:
 
     virtual void takeSnapshot(void);
     virtual void executeImageRecognition(void);
+    virtual void endImageRecognition(void);
+    virtual void detectAlarm(Coord actPos, double &conf, char *buff, int buffSize);
 
     virtual J getResidualEnergy(void);
     virtual double getResidualEnergyPercentage(void);

@@ -18,6 +18,8 @@
 
 //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
 
+#include <chrono>
+
 #include "UdpBasicAppJolie.h"
 
 #include "inet/common/lifecycle/NodeOperations.h"
@@ -41,6 +43,7 @@ UdpBasicAppJolie::~UdpBasicAppJolie()
 {
     cancelAndDelete(selfMsg);
     cancelAndDelete(coapServer_selfMsg);
+    cancelAndDelete(alertStart_selfMsg);
 }
 
 void UdpBasicAppJolie::initialize(int stage)
@@ -90,6 +93,10 @@ void UdpBasicAppJolie::initialize(int stage)
 
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
+
+        alertStart_selfMsg = new cMessage("alert_self");
+        double at = par("alarmTime");
+        scheduleAt(simTime() + at, alertStart_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -359,7 +366,19 @@ void UdpBasicAppJolie::processStop()
 
 void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
 {
-    if (msg == coapServer_selfMsg) {
+    if (msg == alertStart_selfMsg) {
+        auto nowT = std::chrono::system_clock::now();
+        //auto nowT = std::chrono::steady_clock::now();
+
+        unsigned long int timeEpoch = std::chrono::duration_cast<std::chrono::milliseconds>(nowT.time_since_epoch()).count();
+
+        //std::time_t now_time = std::chrono::system_clock::to_time_t(nowT);
+        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Real time clock: "
+        //        << std::ctime(&now_time) << "; -> millis: " << timeEpoch << endl << std::flush;
+
+        recordScalar("AlarmStart", timeEpoch);
+    }
+    else if (msg == coapServer_selfMsg) {
         serverCoAP_checkLoop();
         scheduleAt(simTime() + coapServer_loopTimer, coapServer_selfMsg);
     }

@@ -251,6 +251,9 @@ protected:
 
     std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
 
+
+    cMessage *alertStart_selfMsg = nullptr;
+
 public:
     //thread variables
     static std::list<policy> policy_queue;

@@ -328,7 +328,7 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
     }
     else if (msg == selfPosition_selfMsg) {
         sendUpdatePosition();
-        sendUpdateEnergy();
+        //sendUpdateEnergy();
         //checkAlert();
         scheduleAt(simTime() + 1, selfPosition_selfMsg);
     }
@@ -399,7 +399,7 @@ void UdpBasicAppDrone::refreshDisplay() const
 }
 
 void UdpBasicAppDrone::msg1sec_call(void) {
-    for (auto& n : neighMap) {
+    /*for (auto& n : neighMap) {
         auto it = n.second.begin();
         while (it != n.second.end()) {
             if (it->timestamp_lastSeen > neigh_timeout) {
@@ -408,6 +408,18 @@ void UdpBasicAppDrone::msg1sec_call(void) {
             else {
                 it++;
             }
+        }
+    }*/
+
+    simtime_t nowT = simTime();
+
+    auto it = neighMap.begin();
+    while(it != neighMap.end()) {
+        if ((nowT - it->second.timestamp_lastSeen) > neigh_timeout) {
+            it = neighMap.erase(it);
+        }
+        else {
+            it++;
         }
     }
 }
@@ -481,16 +493,25 @@ void UdpBasicAppDrone::updateMobility(void) {
 
             for (auto& n : neighMap) {
 
-                if (n.second.size() > 0) {
-                    UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+                UdpBasicAppJolie::neigh_info_t *ni = &(n.second);
+
+                if (ni->isGW) continue; // remove the gateway
+
+                //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
+                Coord neighPos = ni->info.mob_position;
+
+                addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+
+                //if (n.second.size() > 0) {
+                //    UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
 
                     //if ((ni->isGW) && (ni->uavReferee != myAppAddr)) continue; // remove the gateway
-                    if (ni->isGW) continue; // remove the gateway
+                //    if (ni->isGW) continue; // remove the gateway
 
                     //Coord neighPos = ni->info.mob_position + (ni->info.mob_velocity * (simTime() - ni->timestamp_lastSeen));  //TODO see if it is ok
-                    Coord neighPos = ni->info.mob_position;
+                //    Coord neighPos = ni->info.mob_position;
 
-                    addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
+                //    addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
 
                     /*double distance = neighPos.distance(myPos);
 
@@ -500,24 +521,25 @@ void UdpBasicAppDrone::updateMobility(void) {
                 uVec.normalize();
 
                 vmob->addVirtualSpring(uVec, actual_spring_stiffness, actual_spring_distance, springDispl);*/
-                }
+                //}
             }
 
             for (auto& n : neighMap) {
-                if (n.second.size() > 0) {
-                    UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
-                    if (ni->isGW) {
-                        if (ni->uavReferee == myAppAddr) {
-                            Coord neighPos = ni->info.mob_position;
-                            double distance = neighPos.distance(mob->getCurrentPosition());
-                            if (distance > actual_spring_distance) {
-                                addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
-                            }
+                //if (n.second.size() > 0) {
+                //UdpBasicAppJolie::neigh_info_t *ni = &(*(n.second.begin()));
+                UdpBasicAppJolie::neigh_info_t *ni = &(n.second);
+                if (ni->isGW) {
+                    if (ni->uavReferee == myAppAddr) {
+                        Coord neighPos = ni->info.mob_position;
+                        double distance = neighPos.distance(mob->getCurrentPosition());
+                        if (distance > actual_spring_distance) {
+                            addVirtualSpringToMobility(neighPos, actual_spring_distance, actual_spring_stiffness);
                         }
-                        break;
                     }
+                    break;
                 }
-            }
+                //}
+        }
         }
 
         if (focus_spring_isActive) {
@@ -548,16 +570,17 @@ void UdpBasicAppDrone::manageReceivedBeacon(Packet *pk) {
 
     Ipv4Address rcvIPAddr = appmsg->getSrc_info().src_ipAddr;
     if (rcvIPAddr != myIPAddr){
-        if (neighMap.count(rcvIPAddr) == 0) {
-            neighMap[rcvIPAddr] = std::list<UdpBasicAppJolie::neigh_info_t>();
-        }
+        //if (neighMap.count(rcvIPAddr) == 0) {
+        //    neighMap[rcvIPAddr] = std::list<UdpBasicAppJolie::neigh_info_t>();
+        //}
         UdpBasicAppJolie::neigh_info_t rcvInfo;
         rcvInfo.timestamp_lastSeen = simTime();
         rcvInfo.info = appmsg->getSrc_info();
         rcvInfo.uavReferee = appmsg->getUavReferee();
         rcvInfo.isGW = appmsg->isGW();
 
-        neighMap[rcvIPAddr].push_front(rcvInfo);
+        //neighMap[rcvIPAddr].push_front(rcvInfo);
+        neighMap[rcvIPAddr] = rcvInfo;
 
         //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
     }
@@ -880,13 +903,17 @@ void UdpBasicAppDrone::endImageRecognition(void) {
 }
 
 void UdpBasicAppDrone::detectAlarm(Coord actPos, double &conf, char *buff, int buffSize) {
-    /*alarmTime = par("alarmTime");
-            double alarmPositionX = par("alarmPositionX");
-            double alarmPositionY = par("alarmPositionY");
-            alarmPosition = Coord(alarmPositionX, alarmPositionY);
-            alarmGaussDeviationDistance = par("alarmGaussDeviationDistance");
-            alarmMaxAccuracy = par("alarmMaxAccuracy");
-            alarmGaussDeviationMax = par("alarmGaussDeviationMax");*/
+    snprintf(buff, buffSize, "CarCrash");
+
+    if (simTime() >= alarmTime) {
+        double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);
+        if (maxconf < 0) maxconf = 0;
+
+        conf = maxconf / exp( pow(mob->getCurrentPosition().distance(alarmPosition), 2.0) / (2 * pow(alarmGaussDeviationDistance, 2.0) ) );
+    }
+    else {
+        conf = 0;
+    }
 }
 
 } // namespace inet

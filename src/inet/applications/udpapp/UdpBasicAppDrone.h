@@ -129,7 +129,8 @@ public:
     double thresholdEnergyUpdate;
     cMessage *selfPosition_selfMsg = nullptr;
 
-    std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
+    //std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
+    std::map<Ipv4Address, UdpBasicAppJolie::neigh_info_t> neighMap;
 
     power::IEpEnergySource *energySource = nullptr;
     W powerConsumption = W(NaN);

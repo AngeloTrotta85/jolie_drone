@@ -73,6 +73,8 @@ simple UdpBasicAppDrone like IApp, IEnergyConsumer
         double alarmMaxAccuracy = default(90);
         double alarmGaussDeviationMax = default(10);
         
+        double uavRadiusSensor @unit(m) = default(50m);
+        
         //string energyConsumerType = default(""); // NED type of the energy consumer model
         string energySourceModule = default("");           // module path of the energy source module which provides energy to the radio
         //*.energySourceModule = default(absPath(energySourceModule));

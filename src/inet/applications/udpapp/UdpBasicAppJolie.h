@@ -212,6 +212,8 @@ protected:
     const char *packetName = nullptr;
     double neigh_timeout;
 
+    double uavRadiusSensor;
+
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
     const char *dronePositionStringTemplate = nullptr;
@@ -219,6 +221,8 @@ protected:
     const char *droneAlertStringTemplate = nullptr;
     const char *droneImageStringTemplateP1 = nullptr;
     const char *droneImageStringTemplateP2 = nullptr;
+
+    const char *logFilePositions = nullptr;
 
     // address in the REAL world
     const char *jolieAddress = nullptr;
@@ -249,7 +253,8 @@ protected:
 
     cMessage *self1Sec_selfMsg = nullptr;
 
-    std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
+    //std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
+    std::map<Ipv4Address, neigh_info_t> neighMap;
 
 
     cMessage *alertStart_selfMsg = nullptr;

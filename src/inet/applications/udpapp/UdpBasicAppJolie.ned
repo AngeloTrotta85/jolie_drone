@@ -71,7 +71,11 @@ simple UdpBasicAppJolie like IApp
         string droneImageStringTemplateP2 = default("\"}}"); 																	// template for the drone-image part2 template message; example: "}}
         
         double alarmTime @unit(s) = default(100s);
-        double neigh_timeout = default(10);	// neighors timeout                                      
+        double neigh_timeout = default(10);	// neighors timeout       
+        
+        double uavRadiusSensor @unit(m) = default(50m);    
+        
+        string logFilePositions = default("logFilePositions.txt");                           
         
         @display("i=block/app");
         @signal[packetSent](type=Packet);

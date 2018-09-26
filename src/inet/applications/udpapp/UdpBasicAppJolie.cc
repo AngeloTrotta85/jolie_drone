@@ -19,6 +19,7 @@
 //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
 
 #include <chrono>
+#include <fstream>      // std::ofstream
 
 #include "UdpBasicAppJolie.h"
 
@@ -74,6 +75,9 @@ void UdpBasicAppJolie::initialize(int stage)
         jolieAddressPort = par("jolieAddressPort");
         gatewayRealAddress = par("gatewayRealAddress");
         gatewayRealAddressPort = par("gatewayRealAddressPort");
+        logFilePositions = par("logFilePositions");
+
+        uavRadiusSensor = par("uavRadiusSensor");
 
         coapServer_loopTimer = par("coapServerLoopTimer");
         neigh_timeout = par("neigh_timeout");
@@ -165,10 +169,12 @@ int UdpBasicAppJolie::getCloserUAV(void) {
     double minDistance = std::numeric_limits<double>::max();
 
     for (auto& n : neighMap) {
-        double d = mob->getCurrentPosition().distance(n.second.begin()->info.mob_position);
+        //double d = mob->getCurrentPosition().distance(n.second.begin()->info.mob_position);
+        double d = mob->getCurrentPosition().distance(n.second.info.mob_position);
         if (d < minDistance) {
             d = minDistance;
-            closer = n.second.begin()->info.src_appAddr;
+            //closer = n.second.begin()->info.src_appAddr;
+            closer = n.second.info.src_appAddr;
         }
     }
 
@@ -503,9 +509,8 @@ void UdpBasicAppJolie::manageNewEnergy(Packet *pk) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a energy" << endl << std::flush;
 
-    //sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
-    sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(),
-                1, 1); //TODO remove
+    sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
+    //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), 1, 1);
 
     delete pk;
 }
@@ -542,7 +547,7 @@ void UdpBasicAppJolie::manageNewImage(Packet *pk) {
 }
 
 void UdpBasicAppJolie::msg1sec_call(void) {
-    for (auto& n : neighMap) {
+    /*for (auto& n : neighMap) {
         auto it = n.second.begin();
         while (it != n.second.end()) {
             if (it->timestamp_lastSeen > neigh_timeout) {
@@ -552,6 +557,38 @@ void UdpBasicAppJolie::msg1sec_call(void) {
                 it++;
             }
         }
+    }*/
+
+    simtime_t nowT = simTime();
+
+    auto it = neighMap.begin();
+    while(it != neighMap.end()) {
+        if ((nowT - it->second.timestamp_lastSeen) > neigh_timeout) {
+            it = neighMap.erase(it);
+        }
+        else {
+            it++;
+        }
+    }
+
+    // make: node positions log
+    std::ofstream ofs;
+    ofs.open (logFilePositions, std::ofstream::out | std::ofstream::app);
+    if (ofs.is_open()) {
+        //std::stringstream ss;
+        int numberNodes = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
+        auto nowT = std::chrono::system_clock::now();
+        unsigned long int timeEpoch = std::chrono::duration_cast<std::chrono::milliseconds>(nowT.time_since_epoch()).count();
+
+        ofs << "S" << simTime() << " R" << timeEpoch << " U" << uavRadiusSensor << " N" << numberNodes << " ";
+
+        for (int i = 0; i < numberNodes; i++) {
+            IMobility *uavNeigh = dynamic_cast<IMobility *>(this->getParentModule()->getParentModule()->getSubmodule("host", i)->getSubmodule("mobility"));
+            Coord neighPos = uavNeigh->getCurrentPosition();
+            ofs << "P" << neighPos.x << ";" << neighPos.y << " ";
+        }
+        ofs << endl;
+        ofs.close();
     }
 }
 
@@ -562,16 +599,17 @@ void UdpBasicAppJolie::manageReceivedBeacon(Packet *pk) {
 
     Ipv4Address rcvIPAddr = appmsg->getSrc_info().src_ipAddr;
     if (rcvIPAddr != myIPAddr){
-        if (neighMap.count(rcvIPAddr) == 0) {
-            neighMap[rcvIPAddr] = std::list<neigh_info_t>();
-        }
+        //if (neighMap.count(rcvIPAddr) == 0) {
+        //    neighMap[rcvIPAddr] = std::list<neigh_info_t>();
+        //}
         neigh_info_t rcvInfo;
         rcvInfo.timestamp_lastSeen = simTime();
         rcvInfo.info = appmsg->getSrc_info();
         rcvInfo.uavReferee = appmsg->getUavReferee();
         rcvInfo.isGW = appmsg->isGW();
 
-        neighMap[rcvIPAddr].push_front(rcvInfo);
+        //neighMap[rcvIPAddr].push_front(rcvInfo);
+        neighMap[rcvIPAddr] = rcvInfo;
 
         //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a beacon from (" << rcvInfo.info.src_ipAddr << ")" << endl << std::flush;
     }

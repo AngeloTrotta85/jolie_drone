@@ -83,6 +83,8 @@ public:
     double alarmMaxAccuracy;
     double alarmGaussDeviationMax;
 
+    double uavRadiusSensor;
+
     // state
     UdpSocket socket;
     cMessage *selfMsg = nullptr;

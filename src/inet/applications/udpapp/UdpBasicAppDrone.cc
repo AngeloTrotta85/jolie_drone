@@ -67,6 +67,8 @@ void UdpBasicAppDrone::initialize(int stage)
         uavImageSize = par("uavImageSize");
         detectionTime = par("detectionTime");
 
+        uavRadiusSensor = par("uavRadiusSensor");
+
         alarmTime = par("alarmTime");
         double alarmPositionX = par("alarmPositionX");
         double alarmPositionY = par("alarmPositionY");

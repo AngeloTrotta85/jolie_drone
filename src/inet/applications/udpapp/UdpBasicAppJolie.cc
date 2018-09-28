@@ -107,6 +107,12 @@ void UdpBasicAppJolie::initialize(int stage)
 
         std::cout << "UdpBasicAppJolie::initialize found " << addressTable.size() << " drones" << endl << std::flush;
 
+        std::ofstream ofs;
+        ofs.open (logFilePositions, std::ofstream::out);
+        if (ofs.is_open()) {
+            ofs.close();
+        }
+
         serverCoAP_init();
     }
 
@@ -579,14 +585,26 @@ void UdpBasicAppJolie::msg1sec_call(void) {
         int numberNodes = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
         auto nowT = std::chrono::system_clock::now();
         unsigned long int timeEpoch = std::chrono::duration_cast<std::chrono::milliseconds>(nowT.time_since_epoch()).count();
+        double maxX, maxY;
 
-        ofs << "S" << simTime() << " R" << timeEpoch << " U" << uavRadiusSensor << " N" << numberNodes << " ";
+        ofs
+                << "S" << simTime()
+                << " R" << timeEpoch
+                //<< " X" << mob->getConstraintAreaMax().x
+                //<< " Y" << mob->getConstraintAreaMax().y
+                << " U" << uavRadiusSensor
+                << " N" << numberNodes;
 
         for (int i = 0; i < numberNodes; i++) {
             IMobility *uavNeigh = dynamic_cast<IMobility *>(this->getParentModule()->getParentModule()->getSubmodule("host", i)->getSubmodule("mobility"));
             Coord neighPos = uavNeigh->getCurrentPosition();
-            ofs << "P" << neighPos.x << ";" << neighPos.y << " ";
+            maxX = uavNeigh->getConstraintAreaMax().x;
+            maxY = uavNeigh->getConstraintAreaMax().y;
+            ofs << " P" << neighPos.x << ";" << neighPos.y;
         }
+
+        ofs << " X" << maxX << " Y" << maxY << " ";
+
         ofs << endl;
         ofs.close();
     }

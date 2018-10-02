@@ -162,6 +162,7 @@ public:
 
         int a_id;
         char a_name[32];
+        char a_class[64];
         double a_period;
 
         spring springs[3];
@@ -170,6 +171,7 @@ public:
             p_id = drone_id = a_id = -1;
             p_name[0] = 0;
             a_name[0] = 0;
+            a_class[0] = 0;
             a_period = 0;
             for (auto& s : springs) {
                 s.s_id = -1;
@@ -187,6 +189,7 @@ public:
                 << "Policy name: " << pol.p_name << "; "
                 << "Action ID: " << pol.a_id << "; "
                 << "Action name: " << pol.a_name << "; "
+                << "Action class: " << pol.a_class << "; "
                 << "Action period: " << pol.a_period << "; "
                 << "drone ID: " << pol.drone_id << "; ";
         for (auto& s : pol.springs) {
@@ -221,6 +224,7 @@ protected:
     const char *droneAlertStringTemplate = nullptr;
     const char *droneImageStringTemplateP1 = nullptr;
     const char *droneImageStringTemplateP2 = nullptr;
+    const char *droneStatsStringTemplate = nullptr;
 
     const char *logFilePositions = nullptr;
 
@@ -312,6 +316,9 @@ protected:
     void sendEnergySingleUAV_CoAP(int idDrone, double residual);
     void sendAlertSingleUAV_CoAP(int idDrone, double x, double y, double acc, const char *classe);
     void sendImageSingleUAV_CoAP(int idDrone, double x, double y);
+
+    void stats_CoAP(unsigned long int timeEpoch);
+
     //void sendBigImageSingleUAV_CoAP(int idDrone, double x, double y);
 
 public:

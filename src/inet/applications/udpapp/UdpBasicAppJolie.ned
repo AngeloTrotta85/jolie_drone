@@ -69,6 +69,7 @@ simple UdpBasicAppJolie like IApp
         string droneAlertStringTemplate = default("{\"uav\":{\"id\":%d},\"position\":{\"x\":%.02lf,\"y\":%.02lf},\"result\":{\"accuracy\":%.02lf,\"class\":\"%s\"}}"); 			// template for the drone-alert template message;   	example: {"uav":{"id":0},"position":{"x":20.05,"y":42.65}}
         string droneImageStringTemplateP1 = default("{\"uav\":{\"id\":%d},\"image\":{\"base64\":\""); 							// template for the drone-image part1 template message; example: {"uav":{"id":0},"image":{"base64":"
         string droneImageStringTemplateP2 = default("\"}}"); 																	// template for the drone-image part2 template message; example: "}}
+        string droneStatsStringTemplate = default("{\"alarm\":{\"start\":%ld}}"); 		
         
         double alarmTime @unit(s) = default(100s);
         double neigh_timeout = default(10);	// neighors timeout       

@@ -122,6 +122,7 @@ public:
 
     double action_period;
     int action_type;
+    std::string action_class;
     cMessage *periodicMsg = nullptr;
     cMessage *periodicExecutionMsg = nullptr;
 

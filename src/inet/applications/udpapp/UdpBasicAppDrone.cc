@@ -602,6 +602,7 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
     if ((appmsg->getA_id() == A_DETECT) || (appmsg->getA_id() == A_IMAGE)) {
         action_period = appmsg->getA_period();
         action_type = appmsg->getA_id();
+        action_class = std::string(appmsg->getA_class());
         scheduleAt(simTime(), periodicMsg);
     }
 
@@ -905,7 +906,7 @@ void UdpBasicAppDrone::endImageRecognition(void) {
 }
 
 void UdpBasicAppDrone::detectAlarm(Coord actPos, double &conf, char *buff, int buffSize) {
-    snprintf(buff, buffSize, "CarCrash");
+    snprintf(buff, buffSize, "%s", action_class.c_str());
 
     if (simTime() >= alarmTime) {
         double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);

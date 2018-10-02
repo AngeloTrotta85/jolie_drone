@@ -47,6 +47,7 @@ class ApplicationPolicy extends FieldsChunk {
 	int a_id;
 	//char a_name[32]; 
 	string a_name;   
+	string a_class;   
     double a_period;
 	
 	SpringForce springs[3];

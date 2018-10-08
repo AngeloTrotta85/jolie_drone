@@ -624,7 +624,6 @@ void UdpBasicAppJolie::manageNewEnergy_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a energy" << endl << std::flush;
 
     //sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
-    //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), 1, 1);
 
     delete pk;
 }

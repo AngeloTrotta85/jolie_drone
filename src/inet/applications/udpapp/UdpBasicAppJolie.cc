@@ -81,6 +81,8 @@ void UdpBasicAppJolie::initialize(int stage)
 
         uavRadiusSensor = par("uavRadiusSensor");
 
+        implementLocalJolie = par("implementLocalJolie");
+
         coapServer_loopTimer = par("coapServerLoopTimer");
         neigh_timeout = par("neigh_timeout");
 
@@ -115,7 +117,9 @@ void UdpBasicAppJolie::initialize(int stage)
             ofs.close();
         }
 
-        serverCoAP_init();
+        if (!implementLocalJolie){
+            serverCoAP_init();
+        }
     }
 
     //std::cout << "UdpBasicAppJolie::initialize END - Stage " << stage << std::flush << endl;
@@ -428,19 +432,44 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
 
         // process incoming packet
         if (strncmp(msg->getName(), "UDPBasicAppDroneReg", 19) == 0) {
-            manageNewRegistration(check_and_cast<Packet *>(msg));
+            if (implementLocalJolie){
+                manageNewRegistration_local(check_and_cast<Packet *>(msg));
+            }
+            else {
+                manageNewRegistration(check_and_cast<Packet *>(msg));
+            }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDronePos", 19) == 0) {
-            manageNewPosition(check_and_cast<Packet *>(msg));
+            if (implementLocalJolie){
+                manageNewPosition_local(check_and_cast<Packet *>(msg));
+            }
+            else {
+                manageNewPosition(check_and_cast<Packet *>(msg));
+            }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneEnergy", 22) == 0) {
-            manageNewEnergy(check_and_cast<Packet *>(msg));
+            if (implementLocalJolie){
+                manageNewEnergy_local(check_and_cast<Packet *>(msg));
+            }
+            else {
+                manageNewEnergy(check_and_cast<Packet *>(msg));
+            }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneAlert", 21) == 0) {
-            manageNewAlert(check_and_cast<Packet *>(msg));
+            if (implementLocalJolie){
+                manageNewAlert_local(check_and_cast<Packet *>(msg));
+            }
+            else {
+                manageNewAlert(check_and_cast<Packet *>(msg));
+            }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneImage", 21) == 0) {
-            manageNewImage(check_and_cast<Packet *>(msg));
+            if (implementLocalJolie){
+                manageNewImage_local(check_and_cast<Packet *>(msg));
+            }
+            else {
+                manageNewImage(check_and_cast<Packet *>(msg));
+            }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppBeacon", 17) == 0){
             processPacket(check_and_cast<Packet *>(msg));
@@ -553,6 +582,77 @@ void UdpBasicAppJolie::manageNewImage(Packet *pk) {
 
     sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(),
             appmsg->getPosition().x, appmsg->getPosition().y);
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneRegister>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneRegister", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Registration: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a registration" << endl << std::flush;
+
+    //registerSingleUAV_CoAP(appmsg->getDrone_appAddr());
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewPosition_local(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDronePosition>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDronePosition", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Position: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a position" << endl << std::flush;
+
+    //sendPositionSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewEnergy_local(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneEnergy>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDronePosition", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Energy: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a energy" << endl << std::flush;
+
+    //sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
+    //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), 1, 1);
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneAlert>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneAlert", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an alert" << endl << std::flush;
+
+    //sendAlertSingleUAV_CoAP(appmsg->getDrone_appAddr(),  appmsg->getPosition().x, appmsg->getPosition().y, appmsg->getAccuracy(), appmsg->getClasse());
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()));
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneImage", pk->getClassName(), pk->getName());
+
+    EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image" << endl << std::flush;
+
+    //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
 
     delete pk;
 }

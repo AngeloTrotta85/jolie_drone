@@ -217,6 +217,8 @@ protected:
 
     double uavRadiusSensor;
 
+    bool implementLocalJolie;
+
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
     const char *dronePositionStringTemplate = nullptr;
@@ -304,6 +306,12 @@ protected:
     void manageNewEnergy(Packet *pk);
     void manageNewAlert(Packet *pk);
     void manageNewImage(Packet *pk);
+
+    void manageNewRegistration_local(Packet *pk);
+    void manageNewPosition_local(Packet *pk);
+    void manageNewEnergy_local(Packet *pk);
+    void manageNewAlert_local(Packet *pk);
+    void manageNewImage_local(Packet *pk);
 
     void loadImageFromFile(std::stringstream &ss);
 

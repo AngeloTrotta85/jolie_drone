@@ -58,6 +58,8 @@ simple UdpBasicAppJolie like IApp
         bool receiveBroadcast = default(false); // if true, makes the socket receive broadcast packets
         bool joinLocalMulticastGroups = default(false); // if true, makes the socket receive packets from all multicast groups set on local interfaces
         
+        bool implementLocalJolie = default(false);
+        
         double coapServerLoopTimer = default(0.05); // time to check message from the server-thread
         string jolieAddress = default("192.168.1.177"); // address of the orchestrator
         int jolieAddressPort = default(5683); // address port of the orchestrator

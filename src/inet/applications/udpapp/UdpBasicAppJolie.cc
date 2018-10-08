@@ -86,6 +86,27 @@ void UdpBasicAppJolie::initialize(int stage)
         coapServer_loopTimer = par("coapServerLoopTimer");
         neigh_timeout = par("neigh_timeout");
 
+        std::string policyType = par("policyType");
+        if (policyType.compare("DETECT_ALONE") == 0) {
+            isAlone = true;
+            isDetect = true;
+        }
+        else if (policyType.compare("DETECT_FOCUS") == 0) {
+            isAlone = false;
+            isDetect = true;
+        }
+        else if (policyType.compare("IMAGE_ALONE") == 0) {
+            isAlone = true;
+            isDetect = false;
+        }
+        else if (policyType.compare("IMAGE_FOCUS") == 0) {
+            isAlone = false;
+            isDetect = false;
+        }
+        else {
+            throw cRuntimeError("Invalid policyType parameter");
+        }
+
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
 
@@ -596,8 +617,19 @@ void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a registration" << endl << std::flush;
 
     //registerSingleUAV_CoAP(appmsg->getDrone_appAddr());
+    drone_info_t newDI;
+
+    newDI.src_appAddr = appmsg->getDrone_appAddr();
+    newDI.src_ipAddr = addressTable[appmsg->getDrone_appAddr()];
+    newDI.mob_position = Coord(-1, -1);
+    newDI.energy = -1;
+
+    droneMap[newDI.src_appAddr] = newDI;
 
     delete pk;
+
+    // sending first policy
+    sendPolicyCover(newDI.src_appAddr);
 }
 
 void UdpBasicAppJolie::manageNewPosition_local(Packet *pk) {
@@ -610,6 +642,12 @@ void UdpBasicAppJolie::manageNewPosition_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a position" << endl << std::flush;
 
     //sendPositionSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+    if (droneMap.count(appmsg->getDrone_appAddr()) != 0) {
+        droneMap[appmsg->getDrone_appAddr()].mob_position = Coord(appmsg->getPosition().x, appmsg->getPosition().y);
+    }
+    else {
+        EV_INFO << "Received position from an unregistered drone " << appmsg->getDrone_appAddr() << endl;
+    }
 
     delete pk;
 }
@@ -624,6 +662,12 @@ void UdpBasicAppJolie::manageNewEnergy_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a energy" << endl << std::flush;
 
     //sendEnergySingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getResidual());
+    if (droneMap.count(appmsg->getDrone_appAddr()) != 0) {
+        droneMap[appmsg->getDrone_appAddr()].energy = appmsg->getResidual();
+    }
+    else {
+        EV_INFO << "Received energy from an unregistered drone " << appmsg->getDrone_appAddr() << endl;
+    }
 
     delete pk;
 }
@@ -654,6 +698,36 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
     //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
 
     delete pk;
+}
+
+void UdpBasicAppJolie::sendPolicyCover(int droneID) {
+    policy p;
+
+    p.p_id = P_COVER;
+    p.drone_id = droneID;
+    snprintf(p.p_name, sizeof(p.p_name), "cover");
+
+    p.a_period = 10;  // TODO
+    if (isDetect) {
+        snprintf(p.a_name, sizeof(p.a_name), "detect");
+        p.a_id = A_DETECT;
+        snprintf(p.a_class, sizeof(p.a_class), "car-crash");
+    }
+    else {
+        snprintf(p.a_name, sizeof(p.a_name), "image");
+        p.a_id = A_IMAGE;
+    }
+
+    p.springs[SPRING_COVER_IDX].distance = 100; //TODO
+    p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
+    p.springs[SPRING_COVER_IDX].s_id = P_COVER;
+    p.springs[SPRING_COVER_IDX].stiffness = 1;  // TODO
+    snprintf(p.springs[SPRING_COVER_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "cover");
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending policy: " << p << endl << std::flush;
+
+    send_policy_to_drone(&p);
+    send_policy_to_drone(&p);
 }
 
 void UdpBasicAppJolie::msg1sec_call(void) {

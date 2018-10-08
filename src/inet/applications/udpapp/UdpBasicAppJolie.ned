@@ -59,6 +59,7 @@ simple UdpBasicAppJolie like IApp
         bool joinLocalMulticastGroups = default(false); // if true, makes the socket receive packets from all multicast groups set on local interfaces
         
         bool implementLocalJolie = default(false);
+        string policyType @enum("DETECT_ALONE", "DETECT_FOCUS", "IMAGE_ALONE", "IMAGE_FOCUS") = default("DETECT_ALONE");
         
         double coapServerLoopTimer = default(0.05); // time to check message from the server-thread
         string jolieAddress = default("192.168.1.177"); // address of the orchestrator

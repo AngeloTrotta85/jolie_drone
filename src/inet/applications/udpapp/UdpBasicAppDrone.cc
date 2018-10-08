@@ -40,6 +40,8 @@ Define_Module(UdpBasicAppDrone);
 UdpBasicAppDrone::~UdpBasicAppDrone()
 {
     cancelAndDelete(selfMsg);
+    cancelAndDelete(periodicExecutionMsg);
+    cancelAndDelete(periodicMsg);
 }
 
 void UdpBasicAppDrone::initialize(int stage)
@@ -335,14 +337,19 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
         scheduleAt(simTime() + 1, selfPosition_selfMsg);
     }
     else if (msg == periodicMsg) {
-        if (!periodicExecutionMsg->isScheduled()) {
+        //if (!periodicExecutionMsg->isScheduled()) {
             //cancelEvent(periodicMsg);
             //periodicExecutionMsg->ge
             //scheduleAt(simTime() + time + 0.01, periodicMsg);
 
+        //    periodicPolicy();
+        //    scheduleAt(simTime() + action_period, periodicMsg);
+        //}
+
+        if (!periodicExecutionMsg->isScheduled()) {
             periodicPolicy();
-            scheduleAt(simTime() + action_period, periodicMsg);
         }
+        scheduleAt(simTime() + action_period, periodicMsg);
     }
     else if (msg == periodicExecutionMsg) {
         endImageRecognition();
@@ -541,7 +548,7 @@ void UdpBasicAppDrone::updateMobility(void) {
                     break;
                 }
                 //}
-        }
+            }
         }
 
         if (focus_spring_isActive) {
@@ -597,6 +604,8 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] received a new policy. Policy ID: "<< appmsg->getP_id() << endl << std::flush;
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Action ID: " << appmsg->getA_id() << endl << std::flush;
+
     initPolicyVariables();
 
     if ((appmsg->getA_id() == A_DETECT) || (appmsg->getA_id() == A_IMAGE)) {
@@ -610,6 +619,9 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
         actual_spring_isActive = true;
         actual_spring_stiffness = appmsg->getSprings(SPRING_COVER_IDX).stiffness;
         actual_spring_distance = appmsg->getSprings(SPRING_COVER_IDX).distance;
+
+        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Cover active. Stiff : " << actual_spring_stiffness <<
+                "; distance: " << actual_spring_distance << endl << std::flush;
     }
 
     if (appmsg->getSprings(SPRING_FOCUS_IDX).s_id == P_FOCUS) {
@@ -875,12 +887,12 @@ void UdpBasicAppDrone::takeSnapshot(void) {
 }
 
 void UdpBasicAppDrone::executeImageRecognition(void) {
-    double time = truncnormal(detectionTime, 0.1);
+    double time = truncnormal(detectionTime, 0.2);
 
-    if (!periodicMsg->isScheduled()) {
+    //if (!periodicMsg->isScheduled()) {
         //cancelEvent(periodicMsg);
-        scheduleAt(simTime() + 0.01, periodicMsg);
-    }
+    //    scheduleAt(simTime() + 0.01, periodicMsg);
+    //}
 
     scheduleAt(simTime() + time, periodicExecutionMsg);
     //periodicExecutionMsg

@@ -140,6 +140,16 @@ public:
 
     typedef struct {
         simtime_t timestamp_lastSeen;
+
+        int src_appAddr;
+        Ipv4Address src_ipAddr;
+        Coord mob_position;
+        double energy;
+
+    } drone_info_t;
+
+    typedef struct {
+        simtime_t timestamp_lastSeen;
         node_info_msg_t info;
         int uavReferee;
         bool isGW;
@@ -198,7 +208,7 @@ public:
                 << "Spring name: " << s.s_name << "; "
                 << "distance: " << s.distance << "; "
                 << "position: " << s.position << "; "
-                << "stiffness: " << s.stiffness;
+                << "stiffness: " << s.stiffness << ". ";
         }
         return stream;
     }
@@ -218,6 +228,8 @@ protected:
     double uavRadiusSensor;
 
     bool implementLocalJolie;
+    bool isAlone;
+    bool isDetect;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -261,6 +273,7 @@ protected:
 
     //std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
     std::map<Ipv4Address, neigh_info_t> neighMap;
+    std::map<int, drone_info_t> droneMap;
 
 
     cMessage *alertStart_selfMsg = nullptr;
@@ -312,6 +325,8 @@ protected:
     void manageNewEnergy_local(Packet *pk);
     void manageNewAlert_local(Packet *pk);
     void manageNewImage_local(Packet *pk);
+
+    void sendPolicyCover(int droneID);
 
     void loadImageFromFile(std::stringstream &ss);
 

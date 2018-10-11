@@ -52,6 +52,7 @@ public:
      */
     unsigned int addVirtualSpring(Coord unityDirectionVector, double l0, double springDisplacement);
     unsigned int addVirtualSpring(Coord unityDirectionVector, double stiffness, double l0, double springDisplacement);
+    unsigned int addVirtualSpring(Coord unityDirectionVector, double stiffness, double l0, double springDisplacement, bool acuteTest);
 
     /** @brief Update an existing virtual spring
      *  @param idx the spring to modify
@@ -147,6 +148,7 @@ protected:
 
 private:
     std::map <unsigned int, ForceInfo> activeForces;
+    std::map <unsigned int, ForceInfo> activeForces_noAcuteTest;
     unsigned int counterIdx;
 
     power::IEpEnergySource *energySource = nullptr;

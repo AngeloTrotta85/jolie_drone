@@ -80,6 +80,18 @@ void UdpBasicAppJolie::initialize(int stage)
         logFilePositions = par("logFilePositions");
 
         uavRadiusSensor = par("uavRadiusSensor");
+        detectThreshold = par("detectThreshold");
+        googleImageTime = par("googleImageTime");
+        uavFocusRadius = par("uavFocusRadius");
+
+        detectPeriodShort = par("detectPeriodShort");
+        imagePeriodShort = par("imagePeriodShort");
+        detectPeriodLong = par("detectPeriodLong");
+        imagePeriodLong = par("imagePeriodLong");
+
+        coverStiffness = par("coverStiffness");
+        focusStiffness = par("focusStiffness");
+        stopStiffness = par("stopStiffness");
 
         implementLocalJolie = par("implementLocalJolie");
 
@@ -110,6 +122,9 @@ void UdpBasicAppJolie::initialize(int stage)
         myAppAddr = this->getParentModule()->getIndex();
         myIPAddr = Ipv4Address::UNSPECIFIED_ADDRESS;
 
+        imageIdx= 0;
+        jstate = JIOT_COVER;
+        bestDetectValue = 0;
 
         mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
 
@@ -123,9 +138,16 @@ void UdpBasicAppJolie::initialize(int stage)
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
 
+        alarmTime = par("alarmTime");
+        double alarmPositionX = par("alarmPositionX");
+        double alarmPositionY = par("alarmPositionY");
+        alarmPosition = Coord(alarmPositionX, alarmPositionY);
+        alarmGaussDeviationDistance = par("alarmGaussDeviationDistance");
+        alarmMaxAccuracy = par("alarmMaxAccuracyCloud");
+        alarmGaussDeviationMax = par("alarmGaussDeviationMax");
+
         alertStart_selfMsg = new cMessage("alert_self");
-        double at = par("alarmTime");
-        scheduleAt(simTime() + at, alertStart_selfMsg);
+        scheduleAt(simTime() + alarmTime, alertStart_selfMsg);
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -236,6 +258,7 @@ Packet *UdpBasicAppJolie::createBeaconPacket() {
 
     payload->setSrc_info(mineInfo);
     payload->setUavReferee(getCloserUAV());
+    payload->setIsGW(true);
 
     pk->insertAtBack(payload);
     pk->addPar("sourceId") = getId();
@@ -429,24 +452,43 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
     }
     else if (msg->isSelfMessage()) {
-        ASSERT(msg == selfMsg);
-        switch (selfMsg->getKind()) {
-        case START:
-            processStart();
-            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << "started the process" << endl << std::flush;
-            break;
+        if ( strncmp(msg->getName(), "imageSelf_", 10) == 0 ) {
+            unsigned int idx;
+            int droneID;
+            Coord dronePosition;
 
-        case SEND:
-            processSend();
-            break;
+            sscanf(msg->getName(), "imageSelf_%u", &idx);
 
-        case STOP:
-            processStop();
-            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << " stopped the process" << endl << std::flush;
-            break;
+            if (imageChecking.count(idx) > 0) {
+                droneID = imageChecking[idx].dID;
+                dronePosition = imageChecking[idx].pos;
+                imageChecking.erase(idx);
 
-        default:
-            throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
+                checkReceivedGoogleResult(droneID, dronePosition);
+            }
+
+            delete msg;
+        }
+        else {
+            ASSERT(msg == selfMsg);
+            switch (selfMsg->getKind()) {
+            case START:
+                processStart();
+                //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << "started the process" << endl << std::flush;
+                break;
+
+            case SEND:
+                processSend();
+                break;
+
+            case STOP:
+                processStop();
+                //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] " << " stopped the process" << endl << std::flush;
+                break;
+
+            default:
+                throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
+            }
         }
     }
     else if (msg->getKind() == UDP_I_DATA) {
@@ -682,6 +724,7 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an alert" << endl << std::flush;
 
     //sendAlertSingleUAV_CoAP(appmsg->getDrone_appAddr(),  appmsg->getPosition().x, appmsg->getPosition().y, appmsg->getAccuracy(), appmsg->getClasse());
+    checkReceivedAlert(appmsg->getDrone_appAddr(), appmsg->getPosition(), appmsg->getAccuracy(), appmsg->getClasse());
 
     delete pk;
 }
@@ -696,8 +739,165 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image" << endl << std::flush;
 
     //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+    checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
 
     delete pk;
+}
+
+void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, double detectAccuracy, const char *detectClasse) {
+    if (detectAccuracy >= detectThreshold) {
+        if (isAlone) {
+            startAlone(droneID, dronePosition, detectAccuracy);
+        }
+        else {
+            startFocus(droneID, dronePosition, detectAccuracy);
+        }
+    }
+}
+
+void UdpBasicAppJolie::startAlone(int droneID, Coord dronePosition, double detectAccuracy) {
+    // TODO get stats
+    //endSimulation();
+
+    jstate = JIOT_ALARM;
+}
+
+void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detectAccuracy) {
+
+    if (jstate == JIOT_COVER) {
+        bestDetectValue = detectAccuracy;
+
+        sendPolicyStop(droneID, dronePosition);
+
+        for (auto& d : droneMap) {
+            double dist = d.second.mob_position.distance(dronePosition);
+
+            if ( (dist <= (uavRadiusSensor * SQRT_3 * uavFocusRadius)) && (droneID != d.second.src_appAddr) ) {
+                sendPolicyFocus(d.second.src_appAddr, dronePosition);
+            }
+        }
+    }
+    else if (jstate == JIOT_FOCUS){
+        if (bestDetectValue < detectAccuracy) {
+            bestDetectValue = detectAccuracy;
+
+            sendPolicyStop(droneID, dronePosition);
+
+            for (auto& d : droneMap) {
+                double dist = d.second.mob_position.distance(dronePosition);
+
+                if ( (dist <= (uavRadiusSensor * SQRT_3 * uavFocusRadius)) && (droneID != d.second.src_appAddr) ) {
+                    sendPolicyFocus(d.second.src_appAddr, dronePosition);
+                }
+            }
+        }
+    }
+
+    jstate = JIOT_FOCUS;
+}
+
+void UdpBasicAppJolie::checkReceivedImage(int droneID, Coord dronePosition) {
+    char buff[128];
+
+    snprintf(buff, sizeof(buff), "imageSelf_%d", imageIdx);
+
+    imageCheck_type newImg;
+    newImg.dID = droneID;
+    newImg.pos = dronePosition;
+    imageChecking[imageIdx] = newImg;
+
+    ++imageIdx;
+
+    cMessage *self_message = new cMessage(buff);
+    scheduleAt(simTime() + truncnormal(googleImageTime, googleImageTime/20.0), self_message);
+}
+
+void UdpBasicAppJolie::checkReceivedGoogleResult(int droneID, Coord dronePosition) {
+    double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);
+    if (maxconf < 0) maxconf = 0;
+
+    double detectAccuracy = maxconf / exp( pow(dronePosition.distance(alarmPosition), 2.0) / (2 * pow(alarmGaussDeviationDistance, 2.0) ) );
+
+    if (detectAccuracy >= detectThreshold) {
+        if (isAlone) {
+            startAlone(droneID, dronePosition, detectAccuracy);
+        }
+        else {
+            startFocus(droneID, dronePosition, detectAccuracy);
+        }
+    }
+}
+
+void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
+    policy p;
+
+    p.p_id = P_FOCUS;
+    p.drone_id = droneID;
+    snprintf(p.p_name, sizeof(p.p_name), "focus");
+
+    if (isDetect) {
+        snprintf(p.a_name, sizeof(p.a_name), "detect");
+        p.a_id = A_DETECT;
+        snprintf(p.a_class, sizeof(p.a_class), "car-crash");
+        p.a_period = detectPeriodShort;
+    }
+    else {
+        snprintf(p.a_name, sizeof(p.a_name), "image");
+        p.a_id = A_IMAGE;
+        p.a_period = imagePeriodShort;
+    }
+
+    p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
+    p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
+    p.springs[SPRING_COVER_IDX].s_id = P_COVER;
+    p.springs[SPRING_COVER_IDX].stiffness = coverStiffness;
+    snprintf(p.springs[SPRING_COVER_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "cover");
+
+    p.springs[SPRING_FOCUS_IDX].distance = (uavRadiusSensor * SQRT_3 / 3.0);
+    p.springs[SPRING_FOCUS_IDX].position = dronePosition;
+    p.springs[SPRING_FOCUS_IDX].s_id = P_FOCUS;
+    p.springs[SPRING_FOCUS_IDX].stiffness = focusStiffness;
+    snprintf(p.springs[SPRING_FOCUS_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "focus");
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending policy: " << p << endl << std::flush;
+
+    send_policy_to_drone(&p);
+}
+
+void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
+    policy p;
+
+    p.p_id = P_STOP;
+    p.drone_id = droneID;
+    snprintf(p.p_name, sizeof(p.p_name), "stop");
+
+    if (isDetect) {
+        snprintf(p.a_name, sizeof(p.a_name), "detect");
+        p.a_id = A_DETECT;
+        snprintf(p.a_class, sizeof(p.a_class), "car-crash");
+        p.a_period = detectPeriodShort;
+    }
+    else {
+        snprintf(p.a_name, sizeof(p.a_name), "image");
+        p.a_id = A_IMAGE;
+        p.a_period = imagePeriodShort;
+    }
+
+    p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
+    p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
+    p.springs[SPRING_COVER_IDX].s_id = P_COVER;
+    p.springs[SPRING_COVER_IDX].stiffness = coverStiffness;
+    snprintf(p.springs[SPRING_COVER_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "cover");
+
+    p.springs[SPRING_STOP_IDX].distance = 0;
+    p.springs[SPRING_STOP_IDX].position = dronePosition;
+    p.springs[SPRING_STOP_IDX].s_id = P_STOP;
+    p.springs[SPRING_STOP_IDX].stiffness = stopStiffness;
+    snprintf(p.springs[SPRING_STOP_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "stop");
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending policy: " << p << endl << std::flush;
+
+    send_policy_to_drone(&p);
 }
 
 void UdpBasicAppJolie::sendPolicyCover(int droneID) {
@@ -707,27 +907,28 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "cover");
 
-    p.a_period = 10;  // TODO
     if (isDetect) {
         snprintf(p.a_name, sizeof(p.a_name), "detect");
         p.a_id = A_DETECT;
         snprintf(p.a_class, sizeof(p.a_class), "car-crash");
+        p.a_period = detectPeriodLong;
     }
     else {
         snprintf(p.a_name, sizeof(p.a_name), "image");
         p.a_id = A_IMAGE;
+        p.a_period = imagePeriodLong;
     }
 
-    p.springs[SPRING_COVER_IDX].distance = 100; //TODO
+    p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
     p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
     p.springs[SPRING_COVER_IDX].s_id = P_COVER;
-    p.springs[SPRING_COVER_IDX].stiffness = 1;  // TODO
+    p.springs[SPRING_COVER_IDX].stiffness = coverStiffness;
     snprintf(p.springs[SPRING_COVER_IDX].s_name, sizeof(p.springs[SPRING_COVER_IDX].s_name), "cover");
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending policy: " << p << endl << std::flush;
 
     send_policy_to_drone(&p);
-    send_policy_to_drone(&p);
+    //send_policy_to_drone(&p);
 }
 
 void UdpBasicAppJolie::msg1sec_call(void) {
@@ -826,7 +1027,7 @@ bool UdpBasicAppJolie::handleNodeShutdown(IDoneCallback *doneCallback)
 {
     if (selfMsg)
         cancelEvent(selfMsg);
-    //TODO if(socket.isOpened()) socket.close();
+    // if(socket.isOpened()) socket.close();
     return true;
 }
 

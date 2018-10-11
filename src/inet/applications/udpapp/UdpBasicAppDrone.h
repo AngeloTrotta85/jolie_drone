@@ -54,6 +54,12 @@ namespace inet {
 class INET_API UdpBasicAppDrone : public ApplicationBase, public power::IEpEnergyConsumer
 {
 public:
+    typedef enum {
+        NORMAL_SPRING,
+        ONLY_REPULSIVE_SPRING,
+        ONLY_ATTRACTIVE_SPRING
+    } spring_type;
+
     enum DroneState {
         DS_COVER = 1,
         DS_STOP = 2,
@@ -94,6 +100,8 @@ public:
     Ipv4Address myIPAddr;
     std::vector<Ipv4Address> addressTable;
     Ipv4Address gatewayIpAddress;
+
+    int first_policy_received;
 
 
     // statistics
@@ -176,7 +184,7 @@ public:
     void updateMobility(void);
     void sendUpdatePosition(void);
     void sendUpdateEnergy(void);
-    void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness);
+    void addVirtualSpringToMobility(Coord destPos, double spring_l0, double spring_stiffness, spring_type st, bool make_acute_test);
 
     virtual void takeSnapshot(void);
     virtual void executeImageRecognition(void);

@@ -160,6 +160,10 @@ unsigned int VirtualSpringMobility::addVirtualSpring(Coord unityDirectionVector,
 }
 
 unsigned int VirtualSpringMobility::addVirtualSpring(Coord unityDirectionVector, double stiffness, double l0, double springDisplacement){
+    addVirtualSpring(unityDirectionVector, stiffness, l0, springDisplacement, true);
+}
+
+unsigned int VirtualSpringMobility::addVirtualSpring(Coord unityDirectionVector, double stiffness, double l0, double springDisplacement, bool acuteTest){
     unsigned int ris = ++counterIdx;
     ForceInfo newForce;
 
@@ -169,7 +173,12 @@ unsigned int VirtualSpringMobility::addVirtualSpring(Coord unityDirectionVector,
     newForce.unitDirection = unityDirectionVector;
     newForce.force = calculateSpringForce(unityDirectionVector, stiffness, springDisplacement);
 
-    activeForces[ris] = newForce;
+    if (acuteTest) {
+        activeForces[ris] = newForce;
+    }
+    else {
+        activeForces_noAcuteTest[ris] = newForce;
+    }
 
     //activeForces[ris] = calculateSpringForce(unityDirectionVector, stiffness, springDisplacement);
 
@@ -227,6 +236,7 @@ unsigned int VirtualSpringMobility::deleteVirtualSpring(unsigned int idx){
 
 void VirtualSpringMobility::clearVirtualSprings(void) {
     activeForces.clear();
+    activeForces_noAcuteTest.clear();
 
     // update the force
     virtualSpringTotalForce = Coord::ZERO;
@@ -346,6 +356,10 @@ void VirtualSpringMobility::updateTotalForce(void) {
     for (std::list <Coord>::iterator itAct = passActiveForces.begin(); itAct != passActiveForces.end(); itAct++) {
         tot += *itAct;
     }
+    for (auto& ff : activeForces_noAcuteTest) {
+        tot += ff.second.force;
+    }
+
     virtualSpringTotalForce = tot;
 }
 

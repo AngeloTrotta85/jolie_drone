@@ -19,6 +19,8 @@
 #ifndef __INET_UDPBASICAPPJOLIE_H
 #define __INET_UDPBASICAPPJOLIE_H
 
+#define SQRT_3 1.7320508075688772935
+
 //#ifndef COAP_MAX_PDU_SIZE
 //#define COAP_MAX_PDU_SIZE      165000 /* maximum size of a CoAP PDU */
 //#endif /* COAP_MAX_PDU_SIZE */
@@ -138,6 +140,12 @@ class INET_API UdpBasicAppJolie : public ApplicationBase
 {
 public:
 
+    typedef enum {
+        JIOT_COVER,
+        JIOT_FOCUS,
+        JIOT_ALARM
+    } jiot_state;
+
     typedef struct {
         simtime_t timestamp_lastSeen;
 
@@ -147,6 +155,12 @@ public:
         double energy;
 
     } drone_info_t;
+
+
+    typedef struct {
+        int dID;;
+        Coord pos;
+    } imageCheck_type;
 
     typedef struct {
         simtime_t timestamp_lastSeen;
@@ -225,11 +239,31 @@ protected:
     const char *packetName = nullptr;
     double neigh_timeout;
 
+    double detectThreshold;
+    double googleImageTime;
+
     double uavRadiusSensor;
+
+    simtime_t alarmTime;
+    Coord alarmPosition;
+    double alarmGaussDeviationDistance;
+    double alarmMaxAccuracy;
+    double alarmGaussDeviationMax;
 
     bool implementLocalJolie;
     bool isAlone;
     bool isDetect;
+
+    double uavFocusRadius;
+
+    double detectPeriodShort;
+    double imagePeriodShort;
+    double detectPeriodLong;
+    double imagePeriodLong;
+
+    double coverStiffness;
+    double focusStiffness;
+    double stopStiffness;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -274,9 +308,15 @@ protected:
     //std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
     std::map<Ipv4Address, neigh_info_t> neighMap;
     std::map<int, drone_info_t> droneMap;
+    std::map<unsigned int, imageCheck_type> imageChecking;
 
 
     cMessage *alertStart_selfMsg = nullptr;
+
+    unsigned int imageIdx;
+    double bestDetectValue;
+
+    jiot_state jstate;
 
 public:
     //thread variables
@@ -326,7 +366,16 @@ protected:
     void manageNewAlert_local(Packet *pk);
     void manageNewImage_local(Packet *pk);
 
+    void checkReceivedAlert(int droneID, Coord dronePosition, double detectAccuracy, const char *detectClasse);
+    void checkReceivedImage(int droneID, Coord dronePosition);
+    void checkReceivedGoogleResult(int droneID, Coord dronePosition);
+
+    void startAlone(int droneID, Coord dronePosition, double detectAccuracy);
+    void startFocus(int droneID, Coord dronePosition, double detectAccuracy);
+
     void sendPolicyCover(int droneID);
+    void sendPolicyFocus(int droneID, Coord dronePosition);
+    void sendPolicyStop(int droneID, Coord dronePosition);
 
     void loadImageFromFile(std::stringstream &ss);
 

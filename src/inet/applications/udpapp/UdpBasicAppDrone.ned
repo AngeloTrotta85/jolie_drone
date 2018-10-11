@@ -66,12 +66,12 @@ simple UdpBasicAppDrone like IApp, IEnergyConsumer
         int uavImageSize @unit(B) = default(1MB);
         double detectionTime @unit(s) = default(1s);
         
-        double alarmTime @unit(s) = default(100s);
-        double alarmPositionX = default(100);
-        double alarmPositionY = default(100);
-        double alarmGaussDeviationDistance = default(50);
-        double alarmMaxAccuracy = default(90);
-        double alarmGaussDeviationMax = default(10);
+        //double alarmTime @unit(s) = default(100s);
+        //double alarmPositionX = default(100);
+        //double alarmPositionY = default(100);
+        //double alarmGaussDeviationDistance = default(50);
+        //double alarmMaxAccuracy = default(90);
+        //double alarmGaussDeviationMax = default(10);
         
         double uavRadiusSensor @unit(m) = default(50m);
         

@@ -74,10 +74,30 @@ simple UdpBasicAppJolie like IApp
         string droneImageStringTemplateP2 = default("\"}}"); 																	// template for the drone-image part2 template message; example: "}}
         string droneStatsStringTemplate = default("{\"alarm\":{\"start\":%ld}}"); 		
         
-        double alarmTime @unit(s) = default(100s);
         double neigh_timeout = default(10);	// neighors timeout       
         
-        double uavRadiusSensor @unit(m) = default(50m);    
+        double detectThreshold = default(50);
+        double googleImageTime @unit(s) = default(1s);
+        
+        double uavRadiusSensor @unit(m) = default(50m);
+        double uavFocusRadius = default(1.2);
+        
+        double detectPeriodShort @unit(s) = default(3s);
+        double imagePeriodShort @unit(s) = default(3s);
+        double detectPeriodLong @unit(s) = default(10s);
+        double imagePeriodLong @unit(s) = default(10s);
+        
+        double coverStiffness = default(1);
+        double focusStiffness = default(3);
+        double stopStiffness = default(5);
+        
+        double alarmTime @unit(s) = default(100s);
+        double alarmPositionX = default(100);
+        double alarmPositionY = default(100);
+        double alarmGaussDeviationDistance = default(50);
+        double alarmMaxAccuracyCloud = default(80);
+        double alarmMaxAccuracyDrone = default(60);
+        double alarmGaussDeviationMax = default(10);    
         
         string logFilePositions = default("logFilePositions.txt");                           
         

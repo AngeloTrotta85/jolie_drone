@@ -240,6 +240,7 @@ protected:
     double neigh_timeout;
 
     double detectThreshold;
+    double focusActivationThreshold;
     double googleImageTime;
 
     double uavRadiusSensor;
@@ -264,6 +265,9 @@ protected:
     double coverStiffness;
     double focusStiffness;
     double stopStiffness;
+
+    double finalAlarmDelayTime;
+    double focusTime;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -312,6 +316,8 @@ protected:
 
 
     cMessage *alertStart_selfMsg = nullptr;
+    cMessage *end_msg = nullptr;
+    cMessage *focusTime_selfMsg = nullptr;
 
     unsigned int imageIdx;
     double bestDetectValue;
@@ -372,6 +378,8 @@ protected:
 
     void startAlone(int droneID, Coord dronePosition, double detectAccuracy);
     void startFocus(int droneID, Coord dronePosition, double detectAccuracy);
+
+    void startFinalAlarmPublishing(void);
 
     void sendPolicyCover(int droneID);
     void sendPolicyFocus(int droneID, Coord dronePosition);

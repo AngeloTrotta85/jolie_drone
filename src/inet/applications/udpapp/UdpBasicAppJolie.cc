@@ -45,6 +45,7 @@ UdpBasicAppJolie::~UdpBasicAppJolie()
     cancelAndDelete(selfMsg);
     cancelAndDelete(coapServer_selfMsg);
     cancelAndDelete(alertStart_selfMsg);
+    cancelAndDelete(focusTime_selfMsg);
 }
 
 void UdpBasicAppJolie::initialize(int stage)
@@ -81,6 +82,7 @@ void UdpBasicAppJolie::initialize(int stage)
 
         uavRadiusSensor = par("uavRadiusSensor");
         detectThreshold = par("detectThreshold");
+        focusActivationThreshold = par("focusActivationThreshold");
         googleImageTime = par("googleImageTime");
         uavFocusRadius = par("uavFocusRadius");
 
@@ -94,6 +96,9 @@ void UdpBasicAppJolie::initialize(int stage)
         stopStiffness = par("stopStiffness");
 
         implementLocalJolie = par("implementLocalJolie");
+
+        finalAlarmDelayTime = par("finalAlarmDelayTime");
+        focusTime = par("focusTime");
 
         coapServer_loopTimer = par("coapServerLoopTimer");
         neigh_timeout = par("neigh_timeout");
@@ -131,6 +136,9 @@ void UdpBasicAppJolie::initialize(int stage)
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
+
+        end_msg = new cMessage("endMessage_selfMsg");
+        focusTime_selfMsg = new cMessage("focusTime_selfMsg");
 
         coapServer_selfMsg = new cMessage("coapServer_loop");
         scheduleAt(simTime() + coapServer_loopTimer, coapServer_selfMsg);
@@ -451,6 +459,13 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         msg1sec_call();
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
     }
+    else if (msg == focusTime_selfMsg) {
+        jstate = JIOT_ALARM;
+        startFinalAlarmPublishing();
+    }
+    else if (msg == end_msg) {
+        endSimulation();
+    }
     else if (msg->isSelfMessage()) {
         if ( strncmp(msg->getName(), "imageSelf_", 10) == 0 ) {
             unsigned int idx;
@@ -745,7 +760,7 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
 }
 
 void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, double detectAccuracy, const char *detectClasse) {
-    if (detectAccuracy >= detectThreshold) {
+    if (detectAccuracy >= detectThreshold) {  focusActivationThreshold
         if (isAlone) {
             startAlone(droneID, dronePosition, detectAccuracy);
         }
@@ -756,29 +771,15 @@ void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, doub
 }
 
 void UdpBasicAppJolie::startAlone(int droneID, Coord dronePosition, double detectAccuracy) {
-    // TODO get stats
-    //endSimulation();
-
     jstate = JIOT_ALARM;
+
+    startFinalAlarmPublishing();
 }
 
 void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detectAccuracy) {
 
-    if (jstate == JIOT_COVER) {
-        bestDetectValue = detectAccuracy;
-
-        sendPolicyStop(droneID, dronePosition);
-
-        for (auto& d : droneMap) {
-            double dist = d.second.mob_position.distance(dronePosition);
-
-            if ( (dist <= (uavRadiusSensor * SQRT_3 * uavFocusRadius)) && (droneID != d.second.src_appAddr) ) {
-                sendPolicyFocus(d.second.src_appAddr, dronePosition);
-            }
-        }
-    }
-    else if (jstate == JIOT_FOCUS){
-        if (bestDetectValue < detectAccuracy) {
+    if (jstate != JIOT_ALARM) {
+        if (jstate == JIOT_COVER) {
             bestDetectValue = detectAccuracy;
 
             sendPolicyStop(droneID, dronePosition);
@@ -790,10 +791,27 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
                     sendPolicyFocus(d.second.src_appAddr, dronePosition);
                 }
             }
-        }
-    }
 
-    jstate = JIOT_FOCUS;
+            scheduleAt(simTime() + focusTime, focusTime_selfMsg);
+        }
+        else if (jstate == JIOT_FOCUS){
+            if (bestDetectValue < detectAccuracy) {
+                bestDetectValue = detectAccuracy;
+
+                sendPolicyStop(droneID, dronePosition);
+
+                for (auto& d : droneMap) {
+                    double dist = d.second.mob_position.distance(dronePosition);
+
+                    if ( (dist <= (uavRadiusSensor * SQRT_3 * uavFocusRadius)) && (droneID != d.second.src_appAddr) ) {
+                        sendPolicyFocus(d.second.src_appAddr, dronePosition);
+                    }
+                }
+            }
+        }
+
+        jstate = JIOT_FOCUS;
+    }
 }
 
 void UdpBasicAppJolie::checkReceivedImage(int droneID, Coord dronePosition) {
@@ -929,6 +947,10 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
 
     send_policy_to_drone(&p);
     //send_policy_to_drone(&p);
+}
+
+void UdpBasicAppJolie::startFinalAlarmPublishing(void) {
+    scheduleAt(simTime() + truncnormal(finalAlarmDelayTime, finalAlarmDelayTime/10.0), end_msg);
 }
 
 void UdpBasicAppJolie::msg1sec_call(void) {

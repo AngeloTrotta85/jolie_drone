@@ -90,6 +90,7 @@ simple UdpBasicAppJolie like IApp
         double imagePeriodLong @unit(s) = default(10s);
         
         double focusTime @unit(s) = default(15s);
+        double limitFocusOffset @unit(s) = default(10s);
         
         double coverStiffness = default(1);
         double focusStiffness = default(3);

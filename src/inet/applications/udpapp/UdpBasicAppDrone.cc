@@ -681,6 +681,13 @@ void UdpBasicAppDrone::manageNewPolicy(Packet *pk) {
                                 "; distance: " << stop_spring_distance << endl << std::flush;
     }
 
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Policy name: " << appmsg->getP_name()
+            << "; Action name: " << appmsg->getA_name() << "(" << ((appmsg->getA_id() == A_IMAGE) ? "A_IMAGE" : "A_DETECT") << ")"
+            << "; Cover Spring: " << appmsg->getSprings(SPRING_COVER_IDX).s_name << "(dist:" << appmsg->getSprings(SPRING_COVER_IDX).s_name << ")"
+            << "; Stop Spring: " << appmsg->getSprings(SPRING_FOCUS_IDX).s_name << "(dist:" << appmsg->getSprings(SPRING_FOCUS_IDX).s_name << ")"
+            << "; Stop Spring: " << appmsg->getSprings(SPRING_STOP_IDX).s_name << "(dist:" << appmsg->getSprings(SPRING_STOP_IDX).s_name << ")"
+            << endl;
+
     /*int policy_id = appmsg->getP_id();
     switch (policy_id) {
     case P_COVER:
@@ -964,8 +971,9 @@ void UdpBasicAppDrone::detectAlarm(Coord actPos, double &conf, char *buff, int b
     snprintf(buff, buffSize, "%s", action_class.c_str());
 
     if (simTime() >= alarmTime) {
-        double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);
-        if (maxconf < 0) maxconf = 0;
+        //double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);
+        //if (maxconf < 0) maxconf = 0;
+        double maxconf = alarmMaxAccuracy;
 
         conf = maxconf / exp( pow(mob->getCurrentPosition().distance(alarmPosition), 2.0) / (2 * pow(alarmGaussDeviationDistance, 2.0) ) );
     }

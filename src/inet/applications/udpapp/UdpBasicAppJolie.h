@@ -268,6 +268,7 @@ protected:
 
     double finalAlarmDelayTime;
     double focusTime;
+    double limitFocusOffset;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -313,6 +314,7 @@ protected:
     std::map<Ipv4Address, neigh_info_t> neighMap;
     std::map<int, drone_info_t> droneMap;
     std::map<unsigned int, imageCheck_type> imageChecking;
+    std::list<int> droneFocusStop;
 
 
     cMessage *alertStart_selfMsg = nullptr;
@@ -321,6 +323,7 @@ protected:
 
     unsigned int imageIdx;
     double bestDetectValue;
+    simtime_t lastBestDetectValue;
 
     jiot_state jstate;
 
@@ -357,6 +360,8 @@ protected:
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
     int getCloserUAV(void);
+
+    void calculateCoverage(double &cov_abs, double &cov_rel_all, double &cov_rel_hex, double &cov_rel_circle);
 
     virtual void send_policy_to_drone(policy* p);
 

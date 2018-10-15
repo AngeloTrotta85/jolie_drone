@@ -245,6 +245,8 @@ protected:
 
     double uavRadiusSensor;
 
+    bool saveVectorCoverage;
+
     simtime_t alarmTime;
     Coord alarmPosition;
     double alarmGaussDeviationDistance;
@@ -325,7 +327,16 @@ protected:
     double bestDetectValue;
     simtime_t lastBestDetectValue;
 
+    double coverageMax;
+    double coverageMaxCircle;
+    double coverageAll;
+
     jiot_state jstate;
+
+    cOutVector coverageStatsAbs;
+    cOutVector coverageStatsRelAll;
+    cOutVector coverageStatsRelHex;
+    cOutVector coverageStatsRelCircle;
 
 public:
     //thread variables

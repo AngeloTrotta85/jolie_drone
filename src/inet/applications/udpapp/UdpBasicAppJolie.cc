@@ -20,9 +20,10 @@
 
 #include <chrono>
 #include <fstream>      // std::ofstream
+#include <vector>
 
 #include "UdpBasicAppJolie.h"
-#include "UdpBasicAppDrone.h"
+//#include "UdpBasicAppDrone.h"
 
 #include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
@@ -91,6 +92,8 @@ void UdpBasicAppJolie::initialize(int stage)
         imagePeriodShort = par("imagePeriodShort");
         detectPeriodLong = par("detectPeriodLong");
         imagePeriodLong = par("imagePeriodLong");
+
+        saveVectorCoverage = par("saveVectorCoverage");
 
         if (focusActivationThreshold > detectThreshold)
             throw cRuntimeError("Invalid focusActivationThreshold/detectThreshold parameters");
@@ -162,6 +165,11 @@ void UdpBasicAppJolie::initialize(int stage)
 
         alertStart_selfMsg = new cMessage("alert_self");
         scheduleAt(simTime() + alarmTime, alertStart_selfMsg);
+
+        coverageStatsAbs.setName("Coverage Absolute");
+        coverageStatsRelAll.setName("Coverage Relative All Scenario");
+        coverageStatsRelHex.setName("Coverage Relative Hexagons");
+        coverageStatsRelCircle.setName("Coverage relative Circle");
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -177,8 +185,14 @@ void UdpBasicAppJolie::initialize(int stage)
         if (!implementLocalJolie){
             serverCoAP_init();
         }
-    }
 
+        // coverage stats
+        int nnodes = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
+        Coord maxArea = check_and_cast<IMobility *>(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getSubmodule("mobility"))->getConstraintAreaMax();
+        coverageMax = nnodes * pow(uavRadiusSensor, 2.0) * 1.5 * SQRT_3;
+        coverageMaxCircle = nnodes * uavRadiusSensor * uavRadiusSensor * M_PI;
+        coverageAll = maxArea.x * maxArea.y;
+    }
     //std::cout << "UdpBasicAppJolie::initialize END - Stage " << stage << std::flush << endl;
 }
 
@@ -621,13 +635,53 @@ void UdpBasicAppJolie::processPacket(Packet *pk)
 
 void UdpBasicAppJolie::calculateCoverage(double &cov_abs, double &cov_rel_all, double &cov_rel_hex, double &cov_rel_circle) {
     int nnodes = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
+    Coord maxArea = check_and_cast<IMobility *>(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getSubmodule("mobility"))->getConstraintAreaMax();
+    std::vector<std::vector<int>> covMatrix;
+    double areaAbsCovered = 0;
 
     cov_abs = cov_rel_all = cov_rel_hex = cov_rel_circle = 0;
 
-    for (int i = 0; i < nnodes; i++) {
-        UdpBasicAppDrone *d = check_and_cast<UdpBasicAppDrone *>(this->getParentModule()->getParentModule()->getSubmodule("host", i));
-        IMobility *dmob = check_and_cast<IMobility *>(d->getSubmodule("mobility"));
+    covMatrix.resize(maxArea.x);
+    for (auto& v : covMatrix) {
+        v = std::vector<int>();
+        v.resize(maxArea.y, 0);
     }
+
+    for (int i = 0; i < nnodes; i++) {
+        //UdpBasicAppDrone *d = check_and_cast<UdpBasicAppDrone *>(this->getParentModule()->getParentModule()->getSubmodule("host", i));
+        IMobility *dmob = check_and_cast<IMobility *>(this->getParentModule()->getParentModule()->getSubmodule("host", i)->getSubmodule("mobility"));
+        Coord dPos = dmob->getCurrentPosition();
+
+        int minX = 0;
+        int minY = 0;
+        int maxX = maxArea.x;
+        int maxY = maxArea.y;
+
+        if ((dPos.x - uavRadiusSensor) > 0) minX = (dPos.x - uavRadiusSensor);
+        if ((dPos.y - uavRadiusSensor) > 0) minY = (dPos.y - uavRadiusSensor);
+        if ((dPos.x + uavRadiusSensor) < maxArea.x) maxX = (dPos.x + uavRadiusSensor);
+        if ((dPos.y + uavRadiusSensor) < maxArea.y) maxY = (dPos.y + uavRadiusSensor);
+
+        for (int ii = minX; ii < maxX; ii++) {
+            for (int jj = minY; jj < maxY; jj++) {
+                if (covMatrix[ii][jj] == 0) {
+                    if (Coord(ii, jj).distance(dPos) <= uavRadiusSensor) {
+                        covMatrix[ii][jj] = 1;
+                        ++areaAbsCovered;
+                    }
+                }
+            }
+        }
+    }
+
+    cov_abs = areaAbsCovered;
+    cov_rel_all = areaAbsCovered / coverageAll;
+    cov_rel_hex = areaAbsCovered / coverageMax;
+    cov_rel_circle = areaAbsCovered / coverageMaxCircle;
+
+    if (cov_rel_all > 1) cov_rel_all = 0;
+    if (cov_rel_hex > 1) cov_rel_hex = 0;
+    if (cov_rel_circle > 1) cov_rel_circle = 0;
 }
 
 void UdpBasicAppJolie::manageNewRegistration(Packet *pk) {
@@ -834,6 +888,8 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
 
             lastBestDetectValue = simTime();
 
+            jstate = JIOT_FOCUS;
+
             scheduleAt(simTime() + focusTime, focusTime_selfMsg);
         }
         else if (jstate == JIOT_FOCUS){
@@ -863,8 +919,6 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
                 startFinalAlarmPublishing();
             }
         }
-
-        jstate = JIOT_FOCUS;
     }
 }
 
@@ -1016,6 +1070,7 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
 }
 
 void UdpBasicAppJolie::startFinalAlarmPublishing(void) {
+    cancelEvent(focusTime_selfMsg);
     scheduleAt(simTime() + truncnormal(finalAlarmDelayTime, finalAlarmDelayTime/10.0), end_msg);
 }
 
@@ -1042,6 +1097,16 @@ void UdpBasicAppJolie::msg1sec_call(void) {
         else {
             it++;
         }
+    }
+
+    if (saveVectorCoverage) {
+        double cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle;
+        calculateCoverage(cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle);
+
+        coverageStatsAbs.record(cov_abs);
+        coverageStatsRelAll.record(cov_rel_all);
+        coverageStatsRelHex.record(cov_rel_hex);
+        coverageStatsRelCircle.record(cov_rel_circle);
     }
 
     // make: node positions log

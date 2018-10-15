@@ -104,7 +104,8 @@ simple UdpBasicAppJolie like IApp
         double alarmMaxAccuracyDrone = default(60);
         double alarmGaussDeviationMax = default(10);    
         
-        string logFilePositions = default("logFilePositions.txt");                           
+        string logFilePositions = default("logFilePositions.txt");    
+        bool saveVectorCoverage = default(false);                       
         
         @display("i=block/app");
         @signal[packetSent](type=Packet);

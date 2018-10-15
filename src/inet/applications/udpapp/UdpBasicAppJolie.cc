@@ -200,15 +200,28 @@ void UdpBasicAppJolie::finish()
 {
     double cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle;
     calculateCoverage(cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle);
-    recordScalar("coverage end absolute", cov_abs);
-    recordScalar("coverage end relative all scenario", cov_rel_all);
-    recordScalar("coverage end relative hexagon", cov_rel_hex);
-    recordScalar("coverage end relative circle", cov_rel_circle);
 
-    if (bestDetectValue > 0) {
+    if (jstate == JIOT_ALARM) {
         simtime_t alarmDetectTime = simTime() - alarmTime;
         recordScalar("alarm detect delay", alarmDetectTime.dbl());
         recordScalar("alarm detect max confidence", bestDetectValue);
+
+        recordScalar("coverage end absolute", cov_abs);
+        recordScalar("coverage end relative all scenario", cov_rel_all);
+        recordScalar("coverage end relative hexagon", cov_rel_hex);
+        recordScalar("coverage end relative circle", cov_rel_circle);
+
+        recordScalar("detection result", 1);
+    }
+    else {
+
+        recordScalar("coverage alarm absolute", cov_abs);
+        recordScalar("coverage alarm relative all scenario", cov_rel_all);
+        recordScalar("coverage alarm relative hexagon", cov_rel_hex);
+        recordScalar("coverage alarm relative circle", cov_rel_circle);
+
+        recordScalar("detection result", 0);
+
     }
 
     //std::cout << "UdpBasicAppJolie::finish BEGIN" << std::flush << endl;
@@ -490,7 +503,7 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         double cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle;
         calculateCoverage(cov_abs, cov_rel_all, cov_rel_hex, cov_rel_circle);
         recordScalar("coverage alarm absolute", cov_abs);
-        recordScalar("coverage alarmrelative all scenario", cov_rel_all);
+        recordScalar("coverage alarm relative all scenario", cov_rel_all);
         recordScalar("coverage alarm relative hexagon", cov_rel_hex);
         recordScalar("coverage alarm relative circle", cov_rel_circle);
     }
@@ -914,7 +927,7 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
                     }
                 }
             }
-            else if ((simTime() - lastBestDetectValue) > limitFocusOffset) {
+            else if (((simTime() - lastBestDetectValue) > limitFocusOffset) || (bestDetectValue > detectThreshold)) {
                 jstate = JIOT_ALARM;
                 startFinalAlarmPublishing();
             }

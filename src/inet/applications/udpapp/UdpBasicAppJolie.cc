@@ -95,6 +95,8 @@ void UdpBasicAppJolie::initialize(int stage)
 
         saveVectorCoverage = par("saveVectorCoverage");
 
+        avgPDRTime = par("avgPDRTime");
+
         if (focusActivationThreshold > detectThreshold)
             throw cRuntimeError("Invalid focusActivationThreshold/detectThreshold parameters");
 
@@ -115,18 +117,27 @@ void UdpBasicAppJolie::initialize(int stage)
         if (policyType.compare("DETECT_ALONE") == 0) {
             isAlone = true;
             isDetect = true;
+            isStimulus = false;
         }
         else if (policyType.compare("DETECT_FOCUS") == 0) {
             isAlone = false;
             isDetect = true;
+            isStimulus = false;
         }
         else if (policyType.compare("IMAGE_ALONE") == 0) {
             isAlone = true;
             isDetect = false;
+            isStimulus = false;
         }
         else if (policyType.compare("IMAGE_FOCUS") == 0) {
             isAlone = false;
             isDetect = false;
+            isStimulus = false;
+        }
+        else if (policyType.compare("STIMULUS") == 0) {
+            isAlone = false;
+            isDetect = false;
+            isStimulus = true;
         }
         else {
             throw cRuntimeError("Invalid policyType parameter");
@@ -154,6 +165,9 @@ void UdpBasicAppJolie::initialize(int stage)
 
         self1Sec_selfMsg = new cMessage("1sec_self");
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
+
+        self5Sec_selfMsg = new cMessage("5sec_self");
+        scheduleAt(simTime() + 5, self5Sec_selfMsg);
 
         alarmTime = par("alarmTime");
         double alarmPositionX = par("alarmPositionX");
@@ -515,6 +529,10 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         msg1sec_call();
         scheduleAt(simTime() + 1, self1Sec_selfMsg);
     }
+    else if (msg == self5Sec_selfMsg) {
+        msg5sec_call();
+        scheduleAt(simTime() + 5, self5Sec_selfMsg);
+    }
     else if (msg == focusTime_selfMsg) {
         jstate = JIOT_ALARM;
         startFinalAlarmPublishing();
@@ -697,6 +715,67 @@ void UdpBasicAppJolie::calculateCoverage(double &cov_abs, double &cov_rel_all, d
     if (cov_rel_circle > 1) cov_rel_circle = 0;
 }
 
+double UdpBasicAppJolie::calculatePDR_singleUAV(int droneID) {
+    double ris = 0;
+
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+        simtime_t lastCheck = simTime();
+        simtime_t lastPolicy = simTime();
+
+        double sumTime = 0;
+        double numPktInPolicy = 0;
+        double sumPDR = 0;
+
+        auto itPeriod = dr->pol_time_list.begin();
+        auto itMsg = dr->msgRcv_timestamp_list.begin();
+
+        while ( ((simTime() - lastCheck) < avgPDRTime) && (itMsg != dr->msgRcv_timestamp_list.end()) ) {
+
+            if (itPeriod->timestamp > itMsg->timestamp) {
+                double timePolicy = (lastPolicy - itPeriod->timestamp).dbl();
+                double theorPktReceived = timePolicy / itPeriod->intervalmsg;
+
+                double thisPolicyPDR = numPktInPolicy / theorPktReceived;
+                if (thisPolicyPDR > 1) thisPolicyPDR = 1;
+
+                sumPDR += thisPolicyPDR * timePolicy;
+                sumTime += timePolicy;
+
+                numPktInPolicy = 0;
+                lastPolicy = itPeriod->timestamp;
+                itPeriod++;
+
+                if (itPeriod == dr->pol_time_list.end()) break;
+            }
+
+            ++numPktInPolicy;
+
+            itMsg++;
+        }
+
+        if (sumTime > 0) {
+            ris = sumPDR / sumTime;
+        }
+    }
+
+    return ris;
+}
+
+double UdpBasicAppJolie::calculatePDR_allUAV(void) {
+    double ris = 0;
+
+    for (auto& d : droneMap) {
+        ris += calculatePDR_singleUAV(d.first);
+    }
+
+    if (droneMap.size() > 0) {
+        ris = ris / ((double) droneMap.size());
+    }
+
+    return ris;
+}
+
 void UdpBasicAppJolie::manageNewRegistration(Packet *pk) {
     const auto& appmsg = pk->peekDataAt<ApplicationDroneRegister>(B(0), B(pk->getByteLength()));
     if (!appmsg)
@@ -788,6 +867,18 @@ void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
     newDI.mob_position = Coord(-1, -1);
     newDI.energy = -1;
 
+    if (isStimulus) {
+        newDI.activeAction = A_DETECT;
+    }
+    else {
+        if (isDetect) {
+            newDI.activeAction = A_DETECT;
+        }
+        else {
+            newDI.activeAction = A_IMAGE;
+        }
+    }
+
     droneMap[newDI.src_appAddr] = newDI;
 
     delete pk;
@@ -852,7 +943,7 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
 }
 
 void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
-    const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()));
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()), Chunk::PF_ALLOW_SERIALIZATION);
     if (!appmsg)
         throw cRuntimeError("Message (%s)%s is not a ApplicationDroneImage", pk->getClassName(), pk->getName());
 
@@ -867,6 +958,17 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
 }
 
 void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, double detectAccuracy, const char *detectClasse) {
+
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+
+        rcvmsg_time_t rtt;
+        rtt.timestamp = simTime();
+        rtt.type = A_DETECT;
+
+        dr->msgRcv_timestamp_list.push_back(rtt);
+    }
+
     if ((detectAccuracy >= focusActivationThreshold) && (!isAlone)) {
         startFocus(droneID, dronePosition, detectAccuracy);
     }
@@ -938,6 +1040,16 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
 void UdpBasicAppJolie::checkReceivedImage(int droneID, Coord dronePosition) {
     char buff[128];
 
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+
+        rcvmsg_time_t rtt;
+        rtt.timestamp = simTime();
+        rtt.type = A_IMAGE;
+
+        dr->msgRcv_timestamp_list.push_back(rtt);
+    }
+
     snprintf(buff, sizeof(buff), "imageSelf_%d", imageIdx);
 
     imageCheck_type newImg;
@@ -957,6 +1069,7 @@ void UdpBasicAppJolie::checkReceivedGoogleResult(int droneID, Coord dronePositio
     if (simTime() >= alarmTime) {
         //double maxconf = alarmMaxAccuracy - truncnormal(0, alarmGaussDeviationMax);
         //if (maxconf < 0) maxconf = 0;
+
         double maxconf = alarmMaxAccuracy;
 
         detectAccuracy = maxconf / exp( pow(dronePosition.distance(alarmPosition), 2.0) / (2 * pow(alarmGaussDeviationDistance, 2.0) ) );
@@ -982,11 +1095,24 @@ void UdpBasicAppJolie::checkReceivedGoogleResult(int droneID, Coord dronePositio
 void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
     policy p;
 
+    bool isThisDetect = isDetect;
+
     p.p_id = P_FOCUS;
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "focus");
 
-    if (isDetect) {
+    if (isStimulus) {
+        if (droneMap.count(droneID) != 0) {
+            if (droneMap[droneID].activeAction == A_IMAGE) {
+                isThisDetect = false;
+            }
+            else {
+                isThisDetect = true;
+            }
+        }
+    }
+
+    if (isThisDetect) {
         snprintf(p.a_name, sizeof(p.a_name), "detect");
         p.a_id = A_DETECT;
         snprintf(p.a_class, sizeof(p.a_class), "car-crash");
@@ -996,6 +1122,17 @@ void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
         snprintf(p.a_name, sizeof(p.a_name), "image");
         p.a_id = A_IMAGE;
         p.a_period = imagePeriodShort;
+    }
+
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+
+        intevalmsg_time_t itt;
+        itt.timestamp = simTime();
+        itt.intervalmsg = p.a_period;
+
+        dr->activeAction = p.a_id;
+        dr->pol_time_list.push_back(itt);
     }
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
@@ -1018,11 +1155,24 @@ void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
 void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
     policy p;
 
+    bool isThisDetect = isDetect;
+
     p.p_id = P_STOP;
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "stop");
 
-    if (isDetect) {
+    if (isStimulus) {
+        if (droneMap.count(droneID) != 0) {
+            if (droneMap[droneID].activeAction == A_IMAGE) {
+                isThisDetect = false;
+            }
+            else {
+                isThisDetect = true;
+            }
+        }
+    }
+
+    if (isThisDetect) {
         snprintf(p.a_name, sizeof(p.a_name), "detect");
         p.a_id = A_DETECT;
         snprintf(p.a_class, sizeof(p.a_class), "car-crash");
@@ -1032,6 +1182,17 @@ void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
         snprintf(p.a_name, sizeof(p.a_name), "image");
         p.a_id = A_IMAGE;
         p.a_period = imagePeriodShort;
+    }
+
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+
+        intevalmsg_time_t itt;
+        itt.timestamp = simTime();
+        itt.intervalmsg = p.a_period;
+
+        dr->activeAction = p.a_id;
+        dr->pol_time_list.push_back(itt);
     }
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
@@ -1054,11 +1215,27 @@ void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
 void UdpBasicAppJolie::sendPolicyCover(int droneID) {
     policy p;
 
+    bool isThisDetect = isDetect;
+
     p.p_id = P_COVER;
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "cover");
 
-    if (isDetect) {
+    if (isStimulus) {
+        if (droneMap.count(droneID) != 0) {
+            if (droneMap[droneID].activeAction == A_IMAGE) {
+                isThisDetect = false;
+            }
+            else {
+                isThisDetect = true;
+            }
+        }
+        else {
+            isThisDetect = true;
+        }
+    }
+
+    if (isThisDetect) {
         snprintf(p.a_name, sizeof(p.a_name), "detect");
         p.a_id = A_DETECT;
         snprintf(p.a_class, sizeof(p.a_class), "car-crash");
@@ -1068,6 +1245,17 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
         snprintf(p.a_name, sizeof(p.a_name), "image");
         p.a_id = A_IMAGE;
         p.a_period = imagePeriodLong;
+    }
+
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *dr = &droneMap[droneID];
+
+        intevalmsg_time_t itt;
+        itt.timestamp = simTime();
+        itt.intervalmsg = p.a_period;
+
+        dr->activeAction = p.a_id;
+        dr->pol_time_list.push_back(itt);
     }
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
@@ -1152,6 +1340,33 @@ void UdpBasicAppJolie::msg1sec_call(void) {
 
         ofs << endl;
         ofs.close();
+    }
+}
+
+void UdpBasicAppJolie::msg5sec_call(void) {
+    if (isStimulus) {
+        double avgPDR = calculatePDR_allUAV();
+
+        //use the stimulus to update the behavior
+        for (auto& d : droneMap) {
+            drone_info_t *di = &(d.second);
+            double dronePDR = calculatePDR_singleUAV(d.first);
+
+            if (di->activeAction == A_DETECT) {
+                double respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+
+                if (dblrand() < respD2I) {
+                    di->activeAction = A_IMAGE;
+                }
+            }
+            else if (di->activeAction == A_IMAGE) {
+                double respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+
+                if (dblrand() < respI2D) {
+                    di->activeAction = A_DETECT;
+                }
+            }
+        }
     }
 }
 

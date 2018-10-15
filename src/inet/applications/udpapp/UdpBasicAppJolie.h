@@ -147,12 +147,26 @@ public:
     } jiot_state;
 
     typedef struct {
+        simtime_t timestamp;
+        double intervalmsg;
+    } intevalmsg_time_t;
+
+    typedef struct {
+        simtime_t timestamp;
+        int type;
+    } rcvmsg_time_t;
+
+    typedef struct {
         simtime_t timestamp_lastSeen;
 
         int src_appAddr;
         Ipv4Address src_ipAddr;
         Coord mob_position;
         double energy;
+
+        int activeAction;
+        std::list<intevalmsg_time_t> pol_time_list;
+        std::list<rcvmsg_time_t> msgRcv_timestamp_list;
 
     } drone_info_t;
 
@@ -256,6 +270,7 @@ protected:
     bool implementLocalJolie;
     bool isAlone;
     bool isDetect;
+    bool isStimulus;
 
     double uavFocusRadius;
 
@@ -271,6 +286,8 @@ protected:
     double finalAlarmDelayTime;
     double focusTime;
     double limitFocusOffset;
+
+    double avgPDRTime;
 
     // JSON message template
     const char *droneRegisterStringTemplate = nullptr;
@@ -311,6 +328,7 @@ protected:
     IMobility *mob;
 
     cMessage *self1Sec_selfMsg = nullptr;
+    cMessage *self5Sec_selfMsg = nullptr;
 
     //std::map<Ipv4Address, std::list<neigh_info_t>> neighMap;
     std::map<Ipv4Address, neigh_info_t> neighMap;
@@ -367,6 +385,7 @@ protected:
     void serverCoAP_thread(void);
 
     void msg1sec_call(void);
+    void msg5sec_call(void);
 
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
@@ -402,6 +421,9 @@ protected:
     void sendPolicyStop(int droneID, Coord dronePosition);
 
     void loadImageFromFile(std::stringstream &ss);
+
+    double calculatePDR_singleUAV(int droneID);
+    double calculatePDR_allUAV(void);
 
     virtual void serverCoAP_checkLoop(void);
     virtual void serverCoAP_init(void);

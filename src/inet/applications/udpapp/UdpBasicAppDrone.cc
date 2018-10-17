@@ -29,11 +29,11 @@
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
-#include "inet/power/storage/SimpleEpEnergyStorage.h"
+//#include "inet/power/storage/SimpleEpEnergyStorage.h"
 
 namespace inet {
 
-using namespace inet::power;
+//using namespace inet::power;
 
 Define_Module(UdpBasicAppDrone);
 
@@ -99,8 +99,8 @@ void UdpBasicAppDrone::initialize(int stage)
         mob = check_and_cast<IMobility *>(this->getParentModule()->getSubmodule("mobility"));
         vmob = dynamic_cast<VirtualSpringMobility *>(this->getParentModule()->getSubmodule("mobility"));
 
-        energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
-        powerConsumption = W(0);
+        //energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
+        //powerConsumption = W(0);
 
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
@@ -118,7 +118,7 @@ void UdpBasicAppDrone::initialize(int stage)
         scheduleAt(simTime() + mobility_timeout, selfMobility_selfMsg);
     }
     else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT) {
-        energySource->addEnergyConsumer(this);
+        //energySource->addEnergyConsumer(this);
     }
     else if (stage == INITSTAGE_LAST) {
         addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
@@ -811,13 +811,15 @@ void UdpBasicAppDrone::positionUAV_update(void) {
 }
 
 J UdpBasicAppDrone::getResidualEnergy(void) {
-    SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
-    return es->getResidualEnergyCapacity();
+    //SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
+    //return es->getResidualEnergyCapacity();
+    return J(0);
 }
 
 double UdpBasicAppDrone::getResidualEnergyPercentage(void){
-    SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
-    return ((es->getResidualEnergyCapacity().get() / es->getNominalEnergyCapacity().get()) * 100.0);
+    //SimpleEpEnergyStorage *es = getModuleFromPar<SimpleEpEnergyStorage>(par("energySourceModule"), this);
+    //return ((es->getResidualEnergyCapacity().get() / es->getNominalEnergyCapacity().get()) * 100.0);
+    return 0;
 }
 
 void UdpBasicAppDrone::energyUAV_update(void) {
@@ -930,10 +932,10 @@ void UdpBasicAppDrone::handleNodeCrash()
 }
 
 void UdpBasicAppDrone::takeSnapshot(void) {
-    powerConsumption = W(1); // = computePowerConsumption();
+    //powerConsumption = W(1); // = computePowerConsumption();
 
 
-    emit(powerConsumptionChangedSignal, powerConsumption.get());
+    //emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 void UdpBasicAppDrone::executeImageRecognition(void) {
@@ -947,9 +949,9 @@ void UdpBasicAppDrone::executeImageRecognition(void) {
     scheduleAt(simTime() + time, periodicExecutionMsg);
     //periodicExecutionMsg
 
-    powerConsumption = W(1); // = computePowerConsumption();
+    //powerConsumption = W(1); // = computePowerConsumption();
 
-    emit(powerConsumptionChangedSignal, powerConsumption.get());
+    //emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 void UdpBasicAppDrone::endImageRecognition(void) {
@@ -957,14 +959,14 @@ void UdpBasicAppDrone::endImageRecognition(void) {
     char classe[64];
     //scheduleAt(simTime() + truncnormal(detectionTime, 0.1), periodicExecutionMsg);
 
-    powerConsumption = W(0); // = computePowerConsumption();
+    //powerConsumption = W(0); // = computePowerConsumption();
 
     memset(classe, 0, sizeof(classe));
     detectAlarm(mob->getCurrentPosition(), confidence, classe, sizeof(classe));
 
     alertUAV_send(confidence, classe);
 
-    emit(powerConsumptionChangedSignal, powerConsumption.get());
+    //emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 void UdpBasicAppDrone::detectAlarm(Coord actPos, double &conf, char *buff, int buffSize) {

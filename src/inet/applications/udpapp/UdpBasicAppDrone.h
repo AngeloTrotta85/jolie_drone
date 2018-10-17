@@ -25,7 +25,7 @@
 
 #include <inet/common/INETDefs.h>
 
-#include <coap.h>
+//#include <coap.h>
 #include <vector>
 #include <thread>         // std::thread
 
@@ -41,8 +41,8 @@
 #include "../base/ApplicationDroneImage_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
-#include "inet/power/contract/IEpEnergyConsumer.h"
-#include "inet/power/contract/IEpEnergySource.h"
+//#include "inet/power/contract/IEpEnergyConsumer.h"
+//#include "inet/power/contract/IEpEnergySource.h"
 
 #include "UdpBasicAppJolie.h"
 
@@ -51,7 +51,7 @@ namespace inet {
 /**
  * UDP application. See NED for more info.
  */
-class INET_API UdpBasicAppDrone : public ApplicationBase, public power::IEpEnergyConsumer
+class INET_API UdpBasicAppDrone : public ApplicationBase//, public power::IEpEnergyConsumer
 {
 public:
     typedef enum {
@@ -143,8 +143,8 @@ public:
     //std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
     std::map<Ipv4Address, UdpBasicAppJolie::neigh_info_t> neighMap;
 
-    power::IEpEnergySource *energySource = nullptr;
-    W powerConsumption = W(NaN);
+    //power::IEpEnergySource *energySource = nullptr;
+    //W powerConsumption = W(NaN);
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -202,8 +202,8 @@ public:
     DroneState getMyState() const { return myState; }
     void setMyState(DroneState myState) { this->myState = myState; }
 
-    virtual power::IEnergySource *getEnergySource() const override { return energySource; }
-    virtual W getPowerConsumption() const override { return powerConsumption; }
+    //virtual power::IEnergySource *getEnergySource() const override { return energySource; }
+    //virtual W getPowerConsumption() const override { return powerConsumption; }
 };
 
 } // namespace inet

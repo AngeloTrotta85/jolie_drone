@@ -27,7 +27,7 @@
 
 #include <inet/common/INETDefs.h>
 
-#include <coap.h>
+//#include <coap.h>
 #include <vector>
 #include <thread>         // std::thread
 #include <mutex>          // std::mutex
@@ -317,7 +317,7 @@ protected:
     //CoAP
     cMessage *coapServer_selfMsg = nullptr;
     double coapServer_loopTimer;
-    coap_context_t*  ctx;
+    //coap_context_t*  ctx;
     std::thread t_coap;
 
     // statistics

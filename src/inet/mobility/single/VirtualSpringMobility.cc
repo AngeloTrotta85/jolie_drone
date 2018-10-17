@@ -21,7 +21,7 @@
 
 namespace inet {
 
-using namespace inet::power;
+//using namespace inet::power;
 
 Define_Module(VirtualSpringMobility);
 
@@ -48,7 +48,7 @@ void VirtualSpringMobility::initialize(int stage)
         virtualSpringTotalForce = Coord::ZERO;
         counterIdx = 0;
 
-        energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
+        //energySource = getModuleFromPar<IEpEnergySource>(par("energySourceModule"), this);
 
         WATCH_RW(virtualSpringTotalForce.x);
         WATCH_RW(virtualSpringTotalForce.y);
@@ -59,8 +59,8 @@ void VirtualSpringMobility::initialize(int stage)
             dir.normalize();
             addVirtualSpring(dir, dblrand() * 15);
         }*/
-        powerConsumption = calculateTotalMotorConsumption();
-        energySource->addEnergyConsumer(this);
+        //powerConsumption = calculateTotalMotorConsumption();
+        //energySource->addEnergyConsumer(this);
     }
     else if (stage == INITSTAGE_LAST) {
 
@@ -389,10 +389,10 @@ W VirtualSpringMobility::calculateTotalMotorConsumption(void) {
 }
 
 void VirtualSpringMobility::drainEnergyByAllMotors(void) {
-    powerConsumption = calculateTotalMotorConsumption();
+    //powerConsumption = calculateTotalMotorConsumption();
 
 
-    emit(powerConsumptionChangedSignal, powerConsumption.get());
+    //emit(powerConsumptionChangedSignal, powerConsumption.get());
 }
 
 } /* namespace inet */

@@ -18,7 +18,7 @@
 
 package jolie_drone.simulations.jolie;
 
-import inet.common.lifecycle.LifecycleController;
+//import inet.common.lifecycle.LifecycleController;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 //import inet.node.inet.AdhocHost;
 import inet.node.aodv.AodvRouter;
@@ -46,10 +46,10 @@ network JolieAndDrones
             parameters:
                 @display("p=150,58;i=device/accesspoint");
         }
-        lifecycleController: LifecycleController {
-            parameters:
-                @display("p=100,350");
-        }
+        //lifecycleController: LifecycleController {
+        //    parameters:
+        //        @display("p=100,350");
+        //}
         host[numDrones]: AodvRouter {
             parameters:
                 @display("r=,,#707070;p=250,58");

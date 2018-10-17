@@ -20,12 +20,13 @@
 #include "inet/common/INETDefs.h"
 
 #include "inet/mobility/base/MovingMobilityBase.h"
-#include "inet/power/contract/IEpEnergyConsumer.h"
-#include "inet/power/contract/IEpEnergySource.h"
+//#include "inet/power/contract/IEpEnergyConsumer.h"
+//#include "inet/power/contract/IEpEnergySource.h"
 
 namespace inet {
 
-class VirtualSpringMobility : public MovingMobilityBase, public power::IEpEnergyConsumer {
+class VirtualSpringMobility : public MovingMobilityBase//, public power::IEpEnergyConsumer
+{
 
 public:
     typedef struct {
@@ -81,8 +82,8 @@ public:
     void filterNodeListAcuteAngleTest(std::list<NodeBasicInfo> &original, std::list<NodeBasicInfo> &filtered);
 
 
-    virtual power::IEnergySource *getEnergySource() const override { return energySource; }
-    virtual W getPowerConsumption() const override { return powerConsumption; }
+    //virtual power::IEnergySource *getEnergySource() const override { return energySource; }
+    //virtual W getPowerConsumption() const override { return powerConsumption; }
 
 protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -151,8 +152,8 @@ private:
     std::map <unsigned int, ForceInfo> activeForces_noAcuteTest;
     unsigned int counterIdx;
 
-    power::IEpEnergySource *energySource = nullptr;
-    W powerConsumption = W(NaN);
+    //power::IEpEnergySource *energySource = nullptr;
+    //W powerConsumption = W(NaN);
 };
 
 } /* namespace inet */

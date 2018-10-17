@@ -385,7 +385,7 @@ void UdpBasicAppJolie::send_policy_to_drone(policy *p) {
     payload->setA_class(p->a_class);
     payload->setA_period(p->a_period);
 
-    for (int jj = 0; jj < payload->getSpringsArraySize(); jj++) {
+    for (unsigned int jj = 0; jj < payload->getSpringsArraySize(); jj++) {
         struct SpringForce newsp;
 
         if (jj < 3) {
@@ -1418,6 +1418,7 @@ void UdpBasicAppJolie::handleNodeCrash()
         cancelEvent(selfMsg);
 }
 
+/*
 static void
 policy_get_handler(coap_context_t *ctx, struct coap_resource_t *resource,
               const coap_endpoint_t *local_interface, coap_address_t *peer,
@@ -1442,7 +1443,9 @@ policy_get_handler(coap_context_t *ctx, struct coap_resource_t *resource,
         }
     }
 }
+*/
 
+/*
 static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *resource,
               const coap_endpoint_t *local_interface, coap_address_t *peer,
               coap_pdu_t *request, str *token, coap_pdu_t *response)
@@ -1483,19 +1486,18 @@ static void policy_post_handler (coap_context_t *ctx, struct coap_resource_t *re
         }
     }
 }
-
+*/
 void UdpBasicAppJolie::serverCoAP_thread(void) {
 
-    using namespace std::placeholders;
+    /*using namespace std::placeholders;
 
     coap_address_t   serv_addr;
     coap_resource_t* policy_resource;
     fd_set           readfds;
     unsigned char buf[3];
-
     std::cout << "UdpBasicAppJolie::serverCoAP_thread BEGIN" << std::flush << endl;
 
-    /* Prepare the CoAP server socket */
+    // Prepare the CoAP server socket
     coap_address_init(&serv_addr);
     serv_addr.addr.sin.sin_family      = AF_INET;
     serv_addr.addr.sin.sin_addr.s_addr = INADDR_ANY;
@@ -1503,7 +1505,7 @@ void UdpBasicAppJolie::serverCoAP_thread(void) {
     ctx                                = coap_new_context(&serv_addr);
     if (!ctx) exit(EXIT_FAILURE);
 
-    /* Initialize the hello resource */
+    // Initialize the hello resource
     policy_resource = coap_resource_init((unsigned char *)"policy", 6, 0);
     coap_register_handler(policy_resource, COAP_REQUEST_GET, policy_get_handler);
     coap_register_handler(policy_resource, COAP_REQUEST_POST, policy_post_handler);
@@ -1515,22 +1517,22 @@ void UdpBasicAppJolie::serverCoAP_thread(void) {
 
     std::cout << "UdpBasicAppJolie::serverCoAP_thread going in SELECT..." << std::flush << endl;
 
-    /*Listen for incoming connections*/
+    //Listen for incoming connections
     while (1) {
         FD_ZERO(&readfds);
         FD_SET( ctx->sockfd, &readfds );
         int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-        if ( result < 0 ) /* socket error */
+        if ( result < 0 ) // socket error
         {
             exit(EXIT_FAILURE);
         }
-        else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) /* socket read*/
+        else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
         {
             coap_read( ctx );
         }
     }
 
-    std::cout << "UdpBasicAppJolie::serverCoAP_thread END" << std::flush << endl;
+    std::cout << "UdpBasicAppJolie::serverCoAP_thread END" << std::flush << endl;*/
 }
 
 void UdpBasicAppJolie::manageReceivedPolicy(rapidjson::Document &doc) {
@@ -1796,7 +1798,7 @@ void UdpBasicAppJolie::manageReceivedPolicy(rapidjson::Document &doc) {
 }
 
 void UdpBasicAppJolie::serverCoAP_init(void) {
-    t_coap = std::thread (std::bind(&UdpBasicAppJolie::serverCoAP_thread, this));
+    //t_coap = std::thread (std::bind(&UdpBasicAppJolie::serverCoAP_thread, this));
 }
 
 void UdpBasicAppJolie::serverCoAP_checkLoop(void) {
@@ -1813,7 +1815,7 @@ void UdpBasicAppJolie::serverCoAP_checkLoop(void) {
     UdpBasicAppJolie::policy_queue_mtx.unlock();
 
 }
-
+/*
 static void
 message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interface,
         const coap_address_t *remote, coap_pdu_t *sent, coap_pdu_t *received,
@@ -1834,6 +1836,8 @@ message_handler(struct coap_context_t *ctx, const coap_endpoint_t *local_interfa
         }
     }
 }
+*/
+
 void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
 
     for (unsigned int i = 0; i < addressTable.size(); i++) {
@@ -1843,7 +1847,7 @@ void UdpBasicAppJolie::registerUAVs_CoAP_init(void) {
 }
 
 void UdpBasicAppJolie::stats_CoAP(unsigned long int timeEpoch) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
 
@@ -1868,21 +1872,21 @@ void UdpBasicAppJolie::stats_CoAP(unsigned long int timeEpoch) {
     snprintf(server_uri, sizeof(server_uri), "coap://%s/stats", jolieAddress);
 
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -1896,31 +1900,32 @@ void UdpBasicAppJolie::stats_CoAP(unsigned long int timeEpoch) {
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
     // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
+
+    //coap_register_response_handler(ctx, message_handler);
+    //coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
+    //coap_send(ctx, ctx->endpoint, &dst_addr, request);
+    //FD_ZERO(&readfds);
+    //FD_SET( ctx->sockfd, &readfds );
+    //int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
+    //if ( result < 0 ) // socket error
+    //{
+    ////    exit(EXIT_FAILURE);
     }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
+    //else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
+    //{
+    //    coap_read( ctx );
+    //}
 
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
-
+     */
 }
 
 void UdpBasicAppJolie::registerSingleUAV_CoAP(int idDrone) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
 
@@ -1949,21 +1954,21 @@ void UdpBasicAppJolie::registerSingleUAV_CoAP(int idDrone) {
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Sending CoAP registration for Drone: " << idDrone << " having local IP: " << addressTable[idDrone]
               << " using string: |" << buff << "|. Sending to " << server_uri << " - port: " << jolieAddressPort << endl;
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -1976,32 +1981,18 @@ void UdpBasicAppJolie::registerSingleUAV_CoAP(int idDrone) {
 
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
-    // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
-    }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
 
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+     */
 }
 
 
 void UdpBasicAppJolie::sendPositionSingleUAV_CoAP(int idDrone, double x, double y) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
 
@@ -2025,21 +2016,21 @@ void UdpBasicAppJolie::sendPositionSingleUAV_CoAP(int idDrone, double x, double 
 
     snprintf(server_uri, sizeof(server_uri), "coap://%s/position", jolieAddress);
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -2052,32 +2043,18 @@ void UdpBasicAppJolie::sendPositionSingleUAV_CoAP(int idDrone, double x, double 
 
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
-    // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
-    }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
 
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+     */
 }
 
 
 void UdpBasicAppJolie::sendEnergySingleUAV_CoAP(int idDrone, double residual) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
 
@@ -2101,21 +2078,21 @@ void UdpBasicAppJolie::sendEnergySingleUAV_CoAP(int idDrone, double residual) {
 
     snprintf(server_uri, sizeof(server_uri), "coap://%s/energy", jolieAddress);
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -2128,32 +2105,18 @@ void UdpBasicAppJolie::sendEnergySingleUAV_CoAP(int idDrone, double residual) {
 
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
-    // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
-    }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
 
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+     */
 }
 
 
 void UdpBasicAppJolie::sendAlertSingleUAV_CoAP(int idDrone, double x, double y, double acc, const char *classe) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
 
@@ -2177,21 +2140,21 @@ void UdpBasicAppJolie::sendAlertSingleUAV_CoAP(int idDrone, double x, double y, 
 
     snprintf(server_uri, sizeof(server_uri), "coap://%s/alert", jolieAddress);
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -2204,27 +2167,12 @@ void UdpBasicAppJolie::sendAlertSingleUAV_CoAP(int idDrone, double x, double y, 
 
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
-    // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
-    }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
-
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+     */
 }
 
 void UdpBasicAppJolie::loadImageFromFile(std::stringstream &ss) {
@@ -2233,7 +2181,7 @@ void UdpBasicAppJolie::loadImageFromFile(std::stringstream &ss) {
 }
 
 void UdpBasicAppJolie::sendImageSingleUAV_CoAP(int idDrone, double x, double y) {
-    char buff[512];
+    /*char buff[512];
     unsigned char buf[3];
     int buffStrLen;
     std::stringstream ss;
@@ -2262,21 +2210,21 @@ void UdpBasicAppJolie::sendImageSingleUAV_CoAP(int idDrone, double x, double y) 
 
     snprintf(server_uri, sizeof(server_uri), "coap://%s/image", jolieAddress);
 
-    /* Prepare coap socket*/
+    // Prepare coap socket
     coap_address_init(&src_addr);
     src_addr.addr.sin.sin_family      = AF_INET;
     src_addr.addr.sin.sin_port        = htons(0);
     src_addr.addr.sin.sin_addr.s_addr = inet_addr("0.0.0.0");
     ctx = coap_new_context(&src_addr);
 
-    /* The destination endpoint */
+    // The destination endpoint
     coap_address_init(&dst_addr);
     dst_addr.addr.sin.sin_family      = AF_INET;
     dst_addr.addr.sin.sin_port        = htons(jolieAddressPort);
     //dst_addr.addr.sin.sin_addr.s_addr = inet_addr("192.168.1.177");
     dst_addr.addr.sin.sin_addr.s_addr = inet_addr(jolieAddress);
 
-    /* Prepare the request */
+    // Prepare the request
     coap_split_uri((const unsigned char *)server_uri, strlen(server_uri), &uri);
     request            = coap_new_pdu();
     request->hdr->type = COAP_MESSAGE_NON; //COAP_MESSAGE_CON;
@@ -2290,27 +2238,12 @@ void UdpBasicAppJolie::sendImageSingleUAV_CoAP(int idDrone, double x, double y) 
 
     //std::cout << "Sending URI: |" << uri.path.s << "| of length: " << uri.path.length << std::endl;
 
-    // Set the handler and send the request
-    /*coap_register_response_handler(ctx, message_handler);
-    coap_send_confirmed(ctx, ctx->endpoint, &dst_addr, request);
-    coap_send(ctx, ctx->endpoint, &dst_addr, request);
-    FD_ZERO(&readfds);
-    FD_SET( ctx->sockfd, &readfds );
-    int result = select( FD_SETSIZE, &readfds, 0, 0, NULL );
-    if ( result < 0 ) // socket error
-    {
-        exit(EXIT_FAILURE);
-    }
-    else if ( result > 0 && FD_ISSET( ctx->sockfd, &readfds )) // socket read
-    {
-        coap_read( ctx );
-    }*/
-
     coap_send(ctx, ctx->endpoint, &dst_addr, request);
     coap_new_message_id(ctx);
 
 
     //std::cout << "UdpBasicAppJolie::registerSingleUAV_CoAP END" << std::flush << endl;
+     */
 }
 
 /*

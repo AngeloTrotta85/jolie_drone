@@ -359,6 +359,11 @@ protected:
     cOutVector coverageStatsRelHex;
     cOutVector coverageStatsRelCircle;
 
+    cOutVector detectRatio;
+    cOutVector detect2imageRis;
+    cOutVector image2detectRis;
+    cOutVector avgPDR_vec;
+
 public:
     //thread variables
     static std::list<policy> policy_queue;

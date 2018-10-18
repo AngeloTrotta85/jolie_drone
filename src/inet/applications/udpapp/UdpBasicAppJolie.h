@@ -51,6 +51,8 @@
 #include "../base/ApplicationDroneEnergy_m.h"
 #include "../base/ApplicationDroneRegister_m.h"
 #include "../base/ApplicationDroneImage_m.h"
+#include "../base/ApplicationDroneImageFragment_m.h"
+#include "../base/ApplicationDroneFragmentOfImage_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 
@@ -334,6 +336,7 @@ protected:
     std::map<Ipv4Address, neigh_info_t> neighMap;
     std::map<int, drone_info_t> droneMap;
     std::map<unsigned int, imageCheck_type> imageChecking;
+    std::vector< std::map<unsigned int, unsigned int> > fragmentsLog;
     std::list<int> droneFocusStop;
 
 
@@ -400,6 +403,8 @@ protected:
     void manageNewEnergy(Packet *pk);
     void manageNewAlert(Packet *pk);
     void manageNewImage(Packet *pk);
+
+    void manageNewImageFragment(Packet *pk);
 
     void manageNewRegistration_local(Packet *pk);
     void manageNewPosition_local(Packet *pk);

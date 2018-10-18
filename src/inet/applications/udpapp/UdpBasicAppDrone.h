@@ -39,6 +39,8 @@
 #include "../base/ApplicationDronePosition_m.h"
 #include "../base/ApplicationDroneRegister_m.h"
 #include "../base/ApplicationDroneImage_m.h"
+#include "../base/ApplicationDroneImageFragment_m.h"
+#include "../base/ApplicationDroneFragmentOfImage_m.h"
 
 #include "inet/mobility/single/VirtualSpringMobility.h"
 //#include "inet/power/contract/IEpEnergyConsumer.h"
@@ -81,6 +83,7 @@ public:
     double neigh_timeout;
     double mobility_timeout;
     int uavImageSize;
+    int uavImageFragment;
     double detectionTime;
 
     simtime_t alarmTime;
@@ -140,6 +143,8 @@ public:
     double thresholdEnergyUpdate;
     cMessage *selfPosition_selfMsg = nullptr;
 
+    int imageId2send;
+
     //std::map<Ipv4Address, std::list<UdpBasicAppJolie::neigh_info_t>> neighMap;
     std::map<Ipv4Address, UdpBasicAppJolie::neigh_info_t> neighMap;
 
@@ -178,6 +183,9 @@ public:
     virtual void energyUAV_update(void);
     virtual void alertUAV_send(double acc, const char *classe);
     virtual void imageUAV_send(void);
+
+    virtual void imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total);
+    virtual void imageUAV_send_useFragments(void);
 
     void periodicPolicy(void);
     void msg1sec_call(void);

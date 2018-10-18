@@ -68,6 +68,7 @@ void UdpBasicAppDrone::initialize(int stage)
         thresholdPositionUpdate = par("thresholdPositionUpdate");
         thresholdEnergyUpdate = par("thresholdEnergyUpdate");
         uavImageSize = par("uavImageSize");
+        uavImageFragment = par("uavImageFragment");
         detectionTime = par("detectionTime");
 
         uavRadiusSensor = par("uavRadiusSensor");
@@ -83,6 +84,7 @@ void UdpBasicAppDrone::initialize(int stage)
         alarmGaussDeviationMax = jiot->par("alarmGaussDeviationMax");
 
         first_policy_received = -1;
+        imageId2send = 0;
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
@@ -483,7 +485,8 @@ void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l
 void UdpBasicAppDrone::periodicPolicy(void) {
     if (action_type == A_IMAGE) {
         takeSnapshot();
-        imageUAV_send();
+        //imageUAV_send();
+        imageUAV_send_useFragments();
     }
     else if (action_type == A_DETECT) {
         executeImageRecognition();
@@ -906,6 +909,62 @@ void UdpBasicAppDrone::imageUAV_send(void) {
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
+}
+
+
+
+void UdpBasicAppDrone::imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total) {
+    char msgName[64];
+    //sprintf(msgName, "UDPBasicAppDroneFragImage-%d-%d-%d-%d-%lf-%lf", myAppAddr, image_id, fragment_number, fragment_total,
+    //        mob->getCurrentPosition().x, mob->getCurrentPosition().y);
+    sprintf(msgName, "UDPBasicAppDroneFragImage-%d", myAppAddr);
+
+    long msgByteLength = fragment_size;
+
+    Packet *packet = new Packet(msgName);
+
+    const auto& payload = makeShared<ApplicationDroneFragmentOfImage>();
+    //const auto& payload = makeShared<ApplicationDroneAlert>();
+    payload->setChunkLength(B(msgByteLength));
+    auto creationTimeTag = payload->addTag<CreationTimeTag>();
+    creationTimeTag->setCreationTime(simTime());
+
+    payload->setDrone_appAddr(myAppAddr);
+    payload->setDrone_ipAddr(myIPAddr);
+    payload->setPosition(mob->getCurrentPosition());
+    payload->setFn(fragment_number);
+    payload->setFt(fragment_total);
+    payload->setImageID(image_id);
+    //payload->setAccuracy(1);
+    //payload->setClasse("pippo");
+
+    packet->insertAtBack(payload);
+    packet->addPar("sourceId") = getId();
+
+    /*std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image fragment from " << mob->getCurrentPosition()
+                    << "; frag size: " << msgByteLength
+                    << "; frag number: " << fragment_number
+                    << "; frag total: " << fragment_total
+                    << "; img ID: " << image_id
+                    << endl << std::flush;*/
+
+    L3Address destAddr = L3Address(gatewayIpAddress);
+    socket.sendTo(packet, destAddr, destPort);
+}
+
+
+void UdpBasicAppDrone::imageUAV_send_useFragments(void) {
+    int nFragments = ceil(((double) uavImageSize) / ((double) uavImageFragment));
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image using "
+            << nFragments << " fragments of size " << uavImageFragment << endl << std::flush;
+
+    for (int i = 0; i < nFragments; i++) {
+        imageUAV_send_singleFragment(imageId2send, uavImageFragment, i+1, nFragments);
+    }
+    ++imageId2send;
+    //alertUAV_send(10, "ciao");
+    //imageUAV_send_singleFragment(32, 1, 1);
 }
 
 bool UdpBasicAppDrone::handleNodeStart(IDoneCallback *doneCallback)

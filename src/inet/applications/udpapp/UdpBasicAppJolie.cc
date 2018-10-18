@@ -186,7 +186,11 @@ void UdpBasicAppJolie::initialize(int stage)
         coverageStatsRelCircle.setName("Coverage relative Circle");
     }
     else if (stage == INITSTAGE_LAST) {
-        addressTable.resize(this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize(), Ipv4Address::UNSPECIFIED_ADDRESS);
+        int droneNumber = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
+
+        addressTable.resize(droneNumber, Ipv4Address::UNSPECIFIED_ADDRESS);
+
+        fragmentsLog.resize(droneNumber);
 
         std::cout << "UdpBasicAppJolie::initialize found " << addressTable.size() << " drones" << endl << std::flush;
 
@@ -582,8 +586,16 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
     }
     else if (msg->getKind() == UDP_I_DATA) {
 
+       /* std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: " << msg->getName()
+                << "; Class name: " << msg->getClassName()
+                << "; Class full name: " << msg->getFullName()
+                << "; Class full path: " << msg->getFullPath()
+                << "; Class display string: " << msg->getDisplayString()
+                << endl << std::flush;*/
+
         // process incoming packet
         if (strncmp(msg->getName(), "UDPBasicAppDroneReg", 19) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDroneReg" << endl;
             if (implementLocalJolie){
                 manageNewRegistration_local(check_and_cast<Packet *>(msg));
             }
@@ -592,6 +604,7 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
             }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDronePos", 19) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDronePos" << endl;
             if (implementLocalJolie){
                 manageNewPosition_local(check_and_cast<Packet *>(msg));
             }
@@ -600,6 +613,7 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
             }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneEnergy", 22) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDroneEnergy" << endl;
             if (implementLocalJolie){
                 manageNewEnergy_local(check_and_cast<Packet *>(msg));
             }
@@ -608,6 +622,7 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
             }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneAlert", 21) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDroneAlert" << endl;
             if (implementLocalJolie){
                 manageNewAlert_local(check_and_cast<Packet *>(msg));
             }
@@ -616,12 +631,17 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
             }
         }
         else if (strncmp(msg->getName(), "UDPBasicAppDroneImage", 21) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDroneImage" << endl;
             if (implementLocalJolie){
                 manageNewImage_local(check_and_cast<Packet *>(msg));
             }
             else {
                 manageNewImage(check_and_cast<Packet *>(msg));
             }
+        }
+        else if (strncmp(msg->getName(), "UDPBasicAppDroneFragImage", 25) == 0) {
+            //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a message: UDPBasicAppDroneFragImage" << endl;
+            manageNewImageFragment(check_and_cast<Packet *>(msg));
         }
         else if (strncmp(msg->getName(), "UDPBasicAppBeacon", 17) == 0){
             processPacket(check_and_cast<Packet *>(msg));
@@ -710,9 +730,9 @@ void UdpBasicAppJolie::calculateCoverage(double &cov_abs, double &cov_rel_all, d
     cov_rel_hex = areaAbsCovered / coverageMax;
     cov_rel_circle = areaAbsCovered / coverageMaxCircle;
 
-    if (cov_rel_all > 1) cov_rel_all = 0;
-    if (cov_rel_hex > 1) cov_rel_hex = 0;
-    if (cov_rel_circle > 1) cov_rel_circle = 0;
+    if (cov_rel_all > 1) cov_rel_all = 1;
+    if (cov_rel_hex > 1) cov_rel_hex = 1;
+    if (cov_rel_circle > 1) cov_rel_circle = 1;
 }
 
 double UdpBasicAppJolie::calculatePDR_singleUAV(int droneID) {
@@ -943,16 +963,59 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
 }
 
 void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
-    const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()), Chunk::PF_ALLOW_SERIALIZATION);
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()));
     if (!appmsg)
         throw cRuntimeError("Message (%s)%s is not a ApplicationDroneImage", pk->getClassName(), pk->getName());
 
-    EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+    EV_INFO << "Received Image: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image" << endl << std::flush;
 
     //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
     checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
+
+    delete pk;
+}
+
+void UdpBasicAppJolie::manageNewImageFragment(Packet *pk) {
+
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment" << endl << std::flush;
+
+    const auto& appmsg = pk->peekDataAt<ApplicationDroneFragmentOfImage>(B(0), B(pk->getByteLength()));
+    //const auto& appmsg = pk->peekData<ApplicationDroneFragmentOfImage>();
+    if (!appmsg)
+        throw cRuntimeError("Message (%s)%s is not a ApplicationDroneFragmentOfImage", pk->getClassName(), pk->getName());
+    //int droneAppAddr, image_id, fragment_number, fragment_total;
+    //double xD, yD;
+
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment " << pk->getName() << endl << std::flush;
+
+    //sscanf(pk->getName(), "UDPBasicAppDroneImageFrag-%d-%d-%d-%d-%lf-%lf", &droneAppAddr, &image_id, &fragment_number, &fragment_total, &xD, &yD);
+
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment "
+    //        << " Image_id: " << image_id
+    //        << " fragment_number: " << fragment_number
+    //        << " fragment_total: " << fragment_total
+    //        << " Pos: " << Coord(xD, yD)
+    //        << endl << std::flush;
+
+    if (fragmentsLog[appmsg->getDrone_appAddr()].count(appmsg->getImageID()) == 0) {
+        fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()] = 1;
+    }
+    else {
+        fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()]++;
+    }
+
+    if (fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()] >= appmsg->getFt()) {
+        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image with fragments" << endl << std::flush;
+
+        if (implementLocalJolie){
+            checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
+        }
+        else {
+            sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
+        }
+    }
 
     delete pk;
 }
@@ -978,9 +1041,12 @@ void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, doub
 }
 
 void UdpBasicAppJolie::startAlone(int droneID, Coord dronePosition, double detectAccuracy) {
-    jstate = JIOT_ALARM;
 
-    startFinalAlarmPublishing();
+    if (jstate != JIOT_ALARM) {
+        jstate = JIOT_ALARM;
+
+        startFinalAlarmPublishing();
+    }
 }
 
 void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detectAccuracy) {
@@ -1074,6 +1140,9 @@ void UdpBasicAppJolie::checkReceivedGoogleResult(int droneID, Coord dronePositio
 
         detectAccuracy = maxconf / exp( pow(dronePosition.distance(alarmPosition), 2.0) / (2 * pow(alarmGaussDeviationDistance, 2.0) ) );
     }
+
+    std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Analyzed the image. Accuracy: " << detectAccuracy << endl << std::flush;
+
 
     if ((detectAccuracy >= focusActivationThreshold) && (!isAlone)) {
         startFocus(droneID, dronePosition, detectAccuracy);

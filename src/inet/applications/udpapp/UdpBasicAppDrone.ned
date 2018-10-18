@@ -64,6 +64,7 @@ simple UdpBasicAppDrone like IApp, IEnergyConsumer
         double thresholdPositionUpdate @unit(m) = default(1m); // threshold to send position update
         double thresholdEnergyUpdate = default(1); // threshold to send Energy update
         int uavImageSize @unit(B) = default(1MB);
+        int uavImageFragment @unit(B) = default(1024B);
         double detectionTime @unit(s) = default(1s);
         
         //double alarmTime @unit(s) = default(100s);
@@ -74,6 +75,8 @@ simple UdpBasicAppDrone like IApp, IEnergyConsumer
         //double alarmGaussDeviationMax = default(10);
         
         double uavRadiusSensor @unit(m) = default(50m);
+        
+        
         
         //string energyConsumerType = default(""); // NED type of the energy consumer model
         string energySourceModule = default("");           // module path of the energy source module which provides energy to the radio

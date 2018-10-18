@@ -10,3 +10,4 @@ src/Makefile
 out/*
 out/
 simulations/jolie/results/*
+simulations/jolie/results

@@ -358,7 +358,7 @@ void UdpBasicAppDrone::handleMessageWhenUp(cMessage *msg)
         if (!periodicExecutionMsg->isScheduled()) {
             periodicPolicy();
         }
-        scheduleAt(simTime() + action_period, periodicMsg);
+        scheduleAt(simTime() + truncnormal(action_period, action_period/20.0), periodicMsg);
     }
     else if (msg == periodicExecutionMsg) {
         endImageRecognition();
@@ -954,7 +954,8 @@ void UdpBasicAppDrone::imageUAV_send_singleFragment(int image_id, int fragment_s
 
 
 void UdpBasicAppDrone::imageUAV_send_useFragments(void) {
-    int nFragments = ceil(((double) uavImageSize) / ((double) uavImageFragment));
+    //int nFragments = ceil(((double) uavImageSize) / ((double) uavImageFragment));
+    int nFragments = ceil(((double) truncnormal(uavImageSize, uavImageSize/10.0)) / ((double) uavImageFragment));
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image using "
             << nFragments << " fragments of size " << uavImageFragment << endl << std::flush;

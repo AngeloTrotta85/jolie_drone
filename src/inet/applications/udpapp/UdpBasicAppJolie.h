@@ -159,22 +159,7 @@ public:
     } rcvmsg_time_t;
 
     typedef struct {
-        simtime_t timestamp_lastSeen;
-
-        int src_appAddr;
-        Ipv4Address src_ipAddr;
-        Coord mob_position;
-        double energy;
-
-        int activeAction;
-        std::list<intevalmsg_time_t> pol_time_list;
-        std::list<rcvmsg_time_t> msgRcv_timestamp_list;
-
-    } drone_info_t;
-
-
-    typedef struct {
-        int dID;;
+        int dID;
         Coord pos;
     } imageCheck_type;
 
@@ -222,6 +207,22 @@ public:
         }
 
     } policy;
+
+    typedef struct {
+        simtime_t timestamp_lastSeen;
+
+        int src_appAddr;
+        Ipv4Address src_ipAddr;
+        Coord mob_position;
+        double energy;
+
+        policy lastSentPolicy;
+
+        int activeAction;
+        std::list<intevalmsg_time_t> pol_time_list;
+        std::list<rcvmsg_time_t> msgRcv_timestamp_list;
+
+    } drone_info_t;
 
     friend std::ostream& operator<< (std::ostream& stream, const policy& pol) {
         stream
@@ -336,7 +337,7 @@ protected:
     std::map<Ipv4Address, neigh_info_t> neighMap;
     std::map<int, drone_info_t> droneMap;
     std::map<unsigned int, imageCheck_type> imageChecking;
-    std::vector< std::map<unsigned int, unsigned int> > fragmentsLog;
+    std::vector< std::map<int, int> > fragmentsLog;
     std::list<int> droneFocusStop;
 
 

@@ -419,6 +419,20 @@ void UdpBasicAppJolie::send_policy_to_drone(policy *p) {
     packet->insertAtBack(payload);
     packet->addPar("sourceId") = getId();
 
+    if (droneMap.count(p->drone_id) != 0) {
+        //droneMap[p->drone_id].lastSentPolicy = *p;
+        drone_info_t *dr = &droneMap[p->drone_id];
+
+        dr->lastSentPolicy = *p;
+
+        intevalmsg_time_t itt;
+        itt.timestamp = simTime();
+        itt.intervalmsg = p->a_period;
+
+        dr->activeAction = p->a_id;
+        dr->pol_time_list.push_front(itt);
+    }
+
     L3Address destAddr = L3Address(addressTable[p->drone_id]);
     socket.sendTo(packet, destAddr, destPort);
 }
@@ -745,21 +759,38 @@ double UdpBasicAppJolie::calculatePDR_singleUAV(int droneID) {
 
     if (droneMap.count(droneID) != 0) {
         drone_info_t *dr = &droneMap[droneID];
-        simtime_t lastCheck = simTime();
-        simtime_t lastPolicy = simTime();
 
-        double sumTime = 0;
-        double numPktInPolicy = 0;
-        double sumPDR = 0;
+        if ((dr->pol_time_list.size() > 0) && (dr->msgRcv_timestamp_list.size() > 0)) {
 
-        auto itPeriod = dr->pol_time_list.begin();
-        auto itMsg = dr->msgRcv_timestamp_list.begin();
+            auto itPolicy = dr->pol_time_list.begin();
+            auto itMsg = dr->msgRcv_timestamp_list.begin();
 
-        while ( ((simTime() - lastCheck) < avgPDRTime) && (itMsg != dr->msgRcv_timestamp_list.end()) ) {
+            //simtime_t lastMsg = itMsg->timestamp;
+            //simtime_t lastPolicy = itPeriod->timestamp;
+            //simtime_t lastCheck = simTime();
 
-            if (itPeriod->timestamp > itMsg->timestamp) {
-                double timePolicy = (lastPolicy - itPeriod->timestamp).dbl();
-                double theorPktReceived = timePolicy / itPeriod->intervalmsg;
+            simtime_t lastPolicy = simTime();
+
+            simtime_t timeLimit = simtime_t::ZERO;
+            if (simTime() > avgPDRTime) {
+                timeLimit = simTime() - avgPDRTime;
+            }
+
+            double sumTime = 0;
+            double numPktInPolicy = 0;
+            double sumPDR = 0;
+
+            //while ( ((simTime() - lastCheck) < avgPDRTime) && (itPeriod != dr->pol_time_list.end()) ) {
+            //while ((simTime() - itPolicy->timestamp) < avgPDRTime) {
+            while ( (itPolicy != dr->pol_time_list.end()) && ((simTime() - itPolicy->timestamp) < avgPDRTime) ) {
+
+                while ( (itMsg != dr->msgRcv_timestamp_list.end()) && (itPolicy->timestamp <= itMsg->timestamp) ) {
+                    ++numPktInPolicy;
+                    itMsg++;
+                }
+
+                double timePolicy = (lastPolicy - itPolicy->timestamp).dbl();
+                double theorPktReceived = timePolicy / itPolicy->intervalmsg;
 
                 double thisPolicyPDR = numPktInPolicy / theorPktReceived;
                 if (thisPolicyPDR > 1) thisPolicyPDR = 1;
@@ -768,19 +799,82 @@ double UdpBasicAppJolie::calculatePDR_singleUAV(int droneID) {
                 sumTime += timePolicy;
 
                 numPktInPolicy = 0;
-                lastPolicy = itPeriod->timestamp;
-                itPeriod++;
-
-                if (itPeriod == dr->pol_time_list.end()) break;
+                lastPolicy = itPolicy->timestamp;
+                itPolicy++;
             }
 
-            ++numPktInPolicy;
+            if ( (itPolicy != dr->pol_time_list.end()) && (itPolicy->timestamp <= timeLimit) ) {
+                double timePolicy = (lastPolicy - timeLimit).dbl();
+                double theorPktReceived = timePolicy / itPolicy->intervalmsg;
 
-            itMsg++;
-        }
+                double thisPolicyPDR = numPktInPolicy / theorPktReceived;
+                if (thisPolicyPDR > 1) thisPolicyPDR = 1;
 
-        if (sumTime > 0) {
-            ris = sumPDR / sumTime;
+                sumPDR += thisPolicyPDR * timePolicy;
+                sumTime += timePolicy;
+            }
+
+
+            /*while ((simTime() - lastCheck) < avgPDRTime) {
+
+                while ((itPeriod->timestamp > itMsg->timestamp) && (itPeriod != dr->pol_time_list.end())) {
+                    double timePolicy = (lastPolicy - itPeriod->timestamp).dbl();
+                    double theorPktReceived = timePolicy / itPeriod->intervalmsg;
+
+                    double thisPolicyPDR = numPktInPolicy / theorPktReceived;
+                    if (thisPolicyPDR > 1) thisPolicyPDR = 1;
+
+                    sumPDR += thisPolicyPDR * timePolicy;
+                    sumTime += timePolicy;
+
+                    numPktInPolicy = 0;
+                    lastPolicy = itPeriod->timestamp;
+
+
+                    if (itPeriod != dr->pol_time_list.end()) itPeriod++;
+                }
+
+                ++numPktInPolicy;
+                lastCheck = itMsg->timestamp;
+                if ((itMsg != dr->msgRcv_timestamp_list.end())) {
+                    itMsg++;
+                }
+                else {
+                    break;
+                }
+            }
+
+            //while ( ((simTime() - lastCheck) < avgPDRTime) && (itMsg != dr->msgRcv_timestamp_list.end()) ) {
+            while ((simTime() - lastCheck) < avgPDRTime) {
+
+                if (itPeriod->timestamp > itMsg->timestamp) {
+                    double timePolicy = (lastPolicy - itPeriod->timestamp).dbl();
+                    double theorPktReceived = timePolicy / itPeriod->intervalmsg;
+
+                    double thisPolicyPDR = numPktInPolicy / theorPktReceived;
+                    if (thisPolicyPDR > 1) thisPolicyPDR = 1;
+
+                    sumPDR += thisPolicyPDR * timePolicy;
+                    sumTime += timePolicy;
+
+                    numPktInPolicy = 0;
+                    lastPolicy = itPeriod->timestamp;
+                    itPeriod++;
+
+                    if (itPeriod == dr->pol_time_list.end()) break;
+                }
+
+                if ((itMsg != dr->msgRcv_timestamp_list.end())) {
+                    ++numPktInPolicy;
+                    lastCheck = itMsg->timestamp;
+                    itMsg++;
+                }
+            }*/
+
+            if (sumTime > 0) {
+                ris = sumPDR / sumTime;
+            }
+
         }
     }
 
@@ -912,7 +1006,7 @@ void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
 
     }
     catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] manageNewRegistration_local threw an exception: " << e.what() << endl;
     }
 
     delete pk;
@@ -938,7 +1032,7 @@ void UdpBasicAppJolie::manageNewPosition_local(Packet *pk) {
 
     }
     catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] manageNewPosition_local threw an exception: " << e.what() << endl;
     }
 
     delete pk;
@@ -964,7 +1058,7 @@ void UdpBasicAppJolie::manageNewEnergy_local(Packet *pk) {
 
     }
     catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] manageNewEnergy_local threw an exception: " << e.what() << endl;
     }
 
     delete pk;
@@ -986,7 +1080,7 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
 
     }
     catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] manageNewAlert_local threw an exception: " << e.what() << endl;
     }
     delete pk;
 }
@@ -1006,56 +1100,58 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
 
     }
     catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] manageNewImage_local threw an exception: " << e.what() << endl;
     }
 
     delete pk;
 }
 
 void UdpBasicAppJolie::manageNewImageFragment(Packet *pk) {
-    try {
-        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment" << endl << std::flush;
+    //try {
 
-        const auto& appmsg = pk->peekDataAt<ApplicationDroneFragmentOfImage>(B(0), B(pk->getByteLength()));
-        //const auto& appmsg = pk->peekData<ApplicationDroneFragmentOfImage>();
-        if (!appmsg)
-            throw cRuntimeError("Message (%s)%s is not a ApplicationDroneFragmentOfImage", pk->getClassName(), pk->getName());
-        //int droneAppAddr, image_id, fragment_number, fragment_total;
-        //double xD, yD;
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment" << endl << std::flush;
 
-        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment " << pk->getName() << endl << std::flush;
+    //const auto& appmsg = pk->peekDataAt<ApplicationDroneFragmentOfImage>(B(0), B(pk->getByteLength()));
+    //const auto& appmsg = pk->peekData<ApplicationDroneFragmentOfImage>();
+    //if (!appmsg)
+    //    throw cRuntimeError("Message (%s)%s is not a ApplicationDroneFragmentOfImage", pk->getClassName(), pk->getName());
+    int droneAppAddr, image_id, fragment_number, fragment_total;
+    double xD, yD;
 
-        //sscanf(pk->getName(), "UDPBasicAppDroneImageFrag-%d-%d-%d-%d-%lf-%lf", &droneAppAddr, &image_id, &fragment_number, &fragment_total, &xD, &yD);
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment " << pk->getName() << endl << std::flush;
 
-        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment "
-        //        << " Image_id: " << image_id
-        //        << " fragment_number: " << fragment_number
-        //        << " fragment_total: " << fragment_total
-        //        << " Pos: " << Coord(xD, yD)
-        //        << endl << std::flush;
+    sscanf(pk->getName(), "UDPBasicAppDroneFragImage-%d-%d-%d-%d-%lf-%lf", &droneAppAddr, &image_id, &fragment_number, &fragment_total, &xD, &yD);
 
-        if (fragmentsLog[appmsg->getDrone_appAddr()].count(appmsg->getImageID()) == 0) {
-            fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()] = 1;
+    //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment "
+    //        << " Image_id: " << image_id
+    //        << " fragment_number: " << fragment_number
+    //        << " fragment_total: " << fragment_total
+    //        << " Pos: " << Coord(xD, yD)
+    //        << endl << std::flush;
+
+    if (fragmentsLog[droneAppAddr].count(image_id) == 0) {
+
+        fragmentsLog[droneAppAddr][image_id] = 1;
+    }
+    else {
+        fragmentsLog[droneAppAddr][image_id]++;
+    }
+
+    if (fragmentsLog[droneAppAddr][image_id] >= fragment_total) {
+        std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image with fragments" << endl << std::flush;
+
+        if (implementLocalJolie){
+            checkReceivedImage(droneAppAddr, Coord(xD, yD));
         }
         else {
-            fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()]++;
+            sendImageSingleUAV_CoAP(droneAppAddr, xD, yD);
         }
-
-        if (fragmentsLog[appmsg->getDrone_appAddr()][appmsg->getImageID()] >= appmsg->getFt()) {
-            std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image with fragments" << endl << std::flush;
-
-            if (implementLocalJolie){
-                checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
-            }
-            else {
-                sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
-            }
-        }
-
     }
-    catch(const cRuntimeError& e) {
-        std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
-    }
+
+    //}
+    //catch(const cRuntimeError& e) {
+    //    std::cerr << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Throwed an exception: " << e.what() << endl;
+    //}
 
     delete pk;
 }
@@ -1069,7 +1165,7 @@ void UdpBasicAppJolie::checkReceivedAlert(int droneID, Coord dronePosition, doub
         rtt.timestamp = simTime();
         rtt.type = A_DETECT;
 
-        dr->msgRcv_timestamp_list.push_back(rtt);
+        dr->msgRcv_timestamp_list.push_front(rtt);
     }
 
     if ((detectAccuracy >= focusActivationThreshold) && (!isAlone)) {
@@ -1157,7 +1253,7 @@ void UdpBasicAppJolie::checkReceivedImage(int droneID, Coord dronePosition) {
         rtt.timestamp = simTime();
         rtt.type = A_IMAGE;
 
-        dr->msgRcv_timestamp_list.push_back(rtt);
+        dr->msgRcv_timestamp_list.push_front(rtt);
     }
 
     snprintf(buff, sizeof(buff), "imageSelf_%d", imageIdx);
@@ -1237,7 +1333,7 @@ void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
         p.a_period = imagePeriodShort;
     }
 
-    if (droneMap.count(droneID) != 0) {
+    /*if (droneMap.count(droneID) != 0) {
         drone_info_t *dr = &droneMap[droneID];
 
         intevalmsg_time_t itt;
@@ -1246,7 +1342,7 @@ void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
 
         dr->activeAction = p.a_id;
         dr->pol_time_list.push_back(itt);
-    }
+    }*/
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
     p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
@@ -1297,7 +1393,7 @@ void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
         p.a_period = imagePeriodShort;
     }
 
-    if (droneMap.count(droneID) != 0) {
+    /*if (droneMap.count(droneID) != 0) {
         drone_info_t *dr = &droneMap[droneID];
 
         intevalmsg_time_t itt;
@@ -1306,7 +1402,7 @@ void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
 
         dr->activeAction = p.a_id;
         dr->pol_time_list.push_back(itt);
-    }
+    }*/
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
     p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
@@ -1360,7 +1456,7 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
         p.a_period = imagePeriodLong;
     }
 
-    if (droneMap.count(droneID) != 0) {
+    /*if (droneMap.count(droneID) != 0) {
         drone_info_t *dr = &droneMap[droneID];
 
         intevalmsg_time_t itt;
@@ -1369,7 +1465,7 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
 
         dr->activeAction = p.a_id;
         dr->pol_time_list.push_back(itt);
-    }
+    }*/
 
     p.springs[SPRING_COVER_IDX].distance = uavRadiusSensor * SQRT_3;
     p.springs[SPRING_COVER_IDX].position = Coord::ZERO;
@@ -1489,6 +1585,12 @@ void UdpBasicAppJolie::msg5sec_call(void) {
 
                 if (dblrand() < respD2I) {
                     di->activeAction = A_IMAGE;
+
+                    policy pnew = di->lastSentPolicy;
+                    pnew.a_id = A_IMAGE;
+                    snprintf(pnew.a_name, sizeof(pnew.a_name), "image");
+
+                    send_policy_to_drone(&pnew);
                 }
             }
             else if (di->activeAction == A_IMAGE) {
@@ -1499,6 +1601,13 @@ void UdpBasicAppJolie::msg5sec_call(void) {
 
                 if (dblrand() < respI2D) {
                     di->activeAction = A_DETECT;
+
+                    policy pnew = di->lastSentPolicy;
+                    pnew.a_id = A_DETECT;
+                    snprintf(pnew.a_class, sizeof(pnew.a_class), "car-crash");
+                    snprintf(pnew.a_name, sizeof(pnew.a_name), "detect");
+
+                    send_policy_to_drone(&pnew);
                 }
             }
         }

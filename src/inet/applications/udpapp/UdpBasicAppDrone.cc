@@ -913,11 +913,11 @@ void UdpBasicAppDrone::imageUAV_send(void) {
 
 
 
-void UdpBasicAppDrone::imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total) {
+void UdpBasicAppDrone::imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total, Coord myPos) {
     char msgName[64];
-    //sprintf(msgName, "UDPBasicAppDroneFragImage-%d-%d-%d-%d-%lf-%lf", myAppAddr, image_id, fragment_number, fragment_total,
-    //        mob->getCurrentPosition().x, mob->getCurrentPosition().y);
-    sprintf(msgName, "UDPBasicAppDroneFragImage-%d", myAppAddr);
+    sprintf(msgName, "UDPBasicAppDroneFragImage-%d-%d-%d-%d-%lf-%lf", myAppAddr, image_id, fragment_number, fragment_total,
+            myPos.x, myPos.y);
+    //sprintf(msgName, "UDPBasicAppDroneFragImage-%d", myAppAddr);
 
     long msgByteLength = fragment_size;
 
@@ -961,7 +961,7 @@ void UdpBasicAppDrone::imageUAV_send_useFragments(void) {
             << nFragments << " fragments of size " << uavImageFragment << endl << std::flush;
 
     for (int i = 0; i < nFragments; i++) {
-        imageUAV_send_singleFragment(imageId2send, uavImageFragment, i+1, nFragments);
+        imageUAV_send_singleFragment(imageId2send, uavImageFragment, i+1, nFragments, mob->getCurrentPosition());
     }
     ++imageId2send;
     //alertUAV_send(10, "ciao");

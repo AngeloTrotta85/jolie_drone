@@ -184,7 +184,7 @@ public:
     virtual void alertUAV_send(double acc, const char *classe);
     virtual void imageUAV_send(void);
 
-    virtual void imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total);
+    virtual void imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total, Coord myPos);
     virtual void imageUAV_send_useFragments(void);
 
     void periodicPolicy(void);

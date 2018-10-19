@@ -12,3 +12,4 @@ out/
 simulations/jolie/results/*
 simulations/jolie/results
 simulations/jolie/resultsBL
+/.computed/

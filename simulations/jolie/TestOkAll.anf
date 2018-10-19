@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scave:Analysis xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:scave="http://www.omnetpp.org/omnetpp/scave">
+  <inputs>
+    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll2/*-*-*.vec"/>
+    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll2/*-*-*.sca"/>
+  </inputs>
+  <datasets>
+    <datasets name="Delay">
+      <items xsi:type="scave:Add" filterPattern="&quot;alarm detect delay&quot;"/>
+      <items xsi:type="scave:BarChart" name="Delay"/>
+    </datasets>
+    <datasets name="Accuracy">
+      <items xsi:type="scave:Add" filterPattern="&quot;alarm detect max confidence&quot;"/>
+      <items xsi:type="scave:BarChart" name="Accuracy"/>
+    </datasets>
+    <datasets name="Percentage Solution">
+      <items xsi:type="scave:Add" filterPattern="&quot;detection result&quot;"/>
+      <items xsi:type="scave:BarChart" name="Percentage Solutions"/>
+    </datasets>
+    <datasets name="DetectRatio">
+      <items xsi:type="scave:Add" filterPattern="DetectRatio" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="timewinavg">
+        <params name="windowSize" value="3"/>
+      </items>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="detectRatio" lineNameFormat=""/>
+    </datasets>
+    <datasets name="detect2image Probability">
+      <items xsi:type="scave:Add" filterPattern="detect2imageRis" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="detect2image" lineNameFormat=""/>
+    </datasets>
+    <datasets name="avgPDR">
+      <items xsi:type="scave:Add" filterPattern="avgPDR" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="avgPDR" lineNameFormat=""/>
+    </datasets>
+    <datasets name="CoverageScenario">
+      <items xsi:type="scave:Add" filterPattern="&quot;coverage alarm relative all scenario&quot;"/>
+      <items xsi:type="scave:BarChart" name="Coverage Scenario"/>
+    </datasets>
+  </datasets>
+  <chartSheets>
+    <chartSheets name="default" charts="//@datasets/@datasets.0/@items.1 //@datasets/@datasets.1/@items.1 //@datasets/@datasets.2/@items.1 //@datasets/@datasets.3/@items.3 //@datasets/@datasets.4/@items.2 //@datasets/@datasets.5/@items.2 //@datasets/@datasets.6/@items.1"/>
+  </chartSheets>
+</scave:Analysis>

@@ -151,6 +151,9 @@ public:
     //power::IEpEnergySource *energySource = nullptr;
     //W powerConsumption = W(NaN);
 
+  public:
+    std::map<long int, simtime_t> publicPacketSent;
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;

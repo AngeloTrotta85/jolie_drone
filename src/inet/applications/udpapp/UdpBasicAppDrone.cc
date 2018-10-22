@@ -485,8 +485,8 @@ void UdpBasicAppDrone::addVirtualSpringToMobility(Coord destPos, double spring_l
 void UdpBasicAppDrone::periodicPolicy(void) {
     if (action_type == A_IMAGE) {
         takeSnapshot();
-        //imageUAV_send();
-        imageUAV_send_useFragments();
+        imageUAV_send();
+        //imageUAV_send_useFragments();
     }
     else if (action_type == A_DETECT) {
         executeImageRecognition();
@@ -880,13 +880,17 @@ void UdpBasicAppDrone::alertUAV_send(double acc, const char *classe) {
             << " - Class: " << classe << " - Accuracy: " << acc
             << endl << std::flush;
 
+    publicPacketSent[packet->getId()] = simTime();
+
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
 }
 
 void UdpBasicAppDrone::imageUAV_send(void) {
-    char msgName[64];
-    sprintf(msgName, "UDPBasicAppDroneImage-%d", myAppAddr);
+    //char msgName[64];
+    //sprintf(msgName, "UDPBasicAppDroneImage-%d", myAppAddr);
+    char msgName[128];
+    sprintf(msgName, "UDPBasicAppDroneImage-%d-%lf-%lf", myAppAddr, mob->getCurrentPosition().x, mob->getCurrentPosition().y);
 
     long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + uavImageSize;
     //long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + 4;
@@ -907,14 +911,17 @@ void UdpBasicAppDrone::imageUAV_send(void) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image: " << mob->getCurrentPosition() << endl << std::flush;
 
+    publicPacketSent[packet->getId()] = simTime();
+
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
+
 }
 
 
 
 void UdpBasicAppDrone::imageUAV_send_singleFragment(int image_id, int fragment_size, int fragment_number, int fragment_total, Coord myPos) {
-    char msgName[64];
+    char msgName[128];
     sprintf(msgName, "UDPBasicAppDroneFragImage-%d-%d-%d-%d-%lf-%lf", myAppAddr, image_id, fragment_number, fragment_total,
             myPos.x, myPos.y);
     //sprintf(msgName, "UDPBasicAppDroneFragImage-%d", myAppAddr);

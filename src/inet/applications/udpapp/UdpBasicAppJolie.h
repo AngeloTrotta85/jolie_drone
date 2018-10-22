@@ -274,6 +274,7 @@ protected:
     bool isAlone;
     bool isDetect;
     bool isStimulus;
+    bool isAOB;
 
     double uavFocusRadius;
 
@@ -339,6 +340,7 @@ protected:
     std::map<unsigned int, imageCheck_type> imageChecking;
     std::vector< std::map<int, int> > fragmentsLog;
     std::list<int> droneFocusStop;
+    std::map<int, std::map<long int, simtime_t> > receivedPktMap;
 
 
     cMessage *alertStart_selfMsg = nullptr;
@@ -396,6 +398,8 @@ protected:
     void msg1sec_call(void);
     void msg5sec_call(void);
 
+    void checkChangeRule(int droneID);
+
     virtual void manageReceivedBeacon(Packet *msg);
     virtual Packet *createBeaconPacket();
     int getCloserUAV(void);
@@ -433,6 +437,7 @@ protected:
 
     void loadImageFromFile(std::stringstream &ss);
 
+    double calculatePDR_singleUAV_GOD(int droneID);
     double calculatePDR_singleUAV(int droneID);
     double calculatePDR_allUAV(void);
 

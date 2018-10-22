@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "UdpBasicAppJolie.h"
-//#include "UdpBasicAppDrone.h"
+#include "UdpBasicAppDrone.h"
 
 #include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
@@ -118,26 +118,37 @@ void UdpBasicAppJolie::initialize(int stage)
             isAlone = true;
             isDetect = true;
             isStimulus = false;
+            isAOB = false;
         }
         else if (policyType.compare("DETECT_FOCUS") == 0) {
             isAlone = false;
             isDetect = true;
             isStimulus = false;
+            isAOB = false;
         }
         else if (policyType.compare("IMAGE_ALONE") == 0) {
             isAlone = true;
             isDetect = false;
             isStimulus = false;
+            isAOB = false;
         }
         else if (policyType.compare("IMAGE_FOCUS") == 0) {
             isAlone = false;
             isDetect = false;
             isStimulus = false;
+            isAOB = false;
         }
         else if (policyType.compare("STIMULUS") == 0) {
             isAlone = false;
-            isDetect = false;
+            isDetect = true;
             isStimulus = true;
+            isAOB = false;
+        }
+        else if (policyType.compare("AOB") == 0) {
+            isAlone = false;
+            isDetect = true;
+            isStimulus = false;
+            isAOB = true;
         }
         else {
             throw cRuntimeError("Invalid policyType parameter");
@@ -557,7 +568,9 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
         scheduleAt(simTime() + 5, self5Sec_selfMsg);
     }
     else if (msg == focusTime_selfMsg) {
-        jstate = JIOT_ALARM;
+        if (bestDetectValue > detectThreshold){
+            jstate = JIOT_ALARM;
+        }
         startFinalAlarmPublishing();
     }
     else if (msg == end_msg) {
@@ -580,6 +593,12 @@ void UdpBasicAppJolie::handleMessageWhenUp(cMessage *msg)
             }
 
             delete msg;
+        }
+        else if(strncmp(msg->getName(), "stimSelf_", 9) == 0) {
+            int dID;
+            sscanf(msg->getName(), "stimSelf_%d", &dID);
+            checkChangeRule(dID);
+            scheduleAt(simTime() + 4.0 + (dblrand() * 2.0), msg);
         }
         else {
             ASSERT(msg == selfMsg);
@@ -754,6 +773,33 @@ void UdpBasicAppJolie::calculateCoverage(double &cov_abs, double &cov_rel_all, d
     if (cov_rel_circle > 1) cov_rel_circle = 1;
 }
 
+double UdpBasicAppJolie::calculatePDR_singleUAV_GOD(int droneID) {
+    double ris = 0;
+    UdpBasicAppDrone *dd = check_and_cast<UdpBasicAppDrone *>(this->getParentModule()->getParentModule()->getSubmodule("host", droneID)->getSubmodule("app", 0));
+
+    if (receivedPktMap.count(droneID) != 0) {
+        int receivedOK = 0;
+        int sentTotal = 0;
+
+        std::map<long int, simtime_t> *mm = &(receivedPktMap[droneID]);
+
+        for (auto& pd : dd->publicPacketSent) {
+            if ((simTime() - pd.second) <= avgPDRTime) {
+                ++sentTotal;
+
+                if (mm->count(pd.first) != 0) {
+                    ++receivedOK;
+                }
+            }
+        }
+
+        if (sentTotal > 0) {
+            ris = ((double) receivedOK) / ((double) sentTotal);
+        }
+    }
+    return ris;
+}
+
 double UdpBasicAppJolie::calculatePDR_singleUAV(int droneID) {
     double ris = 0;
 
@@ -885,7 +931,8 @@ double UdpBasicAppJolie::calculatePDR_allUAV(void) {
     double ris = 0;
 
     for (auto& d : droneMap) {
-        ris += calculatePDR_singleUAV(d.first);
+        //ris += calculatePDR_singleUAV(d.first);
+        ris += calculatePDR_singleUAV_GOD(d.first);
     }
 
     if (droneMap.size() > 0) {
@@ -987,7 +1034,7 @@ void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
         newDI.mob_position = Coord(-1, -1);
         newDI.energy = -1;
 
-        if (isStimulus) {
+        if ((isStimulus) || (isAOB)) {
             newDI.activeAction = A_DETECT;
         }
         else {
@@ -997,6 +1044,14 @@ void UdpBasicAppJolie::manageNewRegistration_local(Packet *pk) {
             else {
                 newDI.activeAction = A_IMAGE;
             }
+        }
+
+        if ((isStimulus || isAOB) && (droneMap.count(newDI.src_appAddr) == 0)) {
+            char buff[32];
+            snprintf(buff, sizeof(buff), "stimSelf_%d", newDI.src_appAddr);
+
+            cMessage *self_message = new cMessage(buff);
+            scheduleAt(simTime() + 10.0 + (dblrand() * 5.0), self_message);
         }
 
         droneMap[newDI.src_appAddr] = newDI;
@@ -1087,16 +1142,24 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
 
 void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
     try {
-        const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()));
-        if (!appmsg)
-            throw cRuntimeError("Message (%s)%s is not a ApplicationDroneImage", pk->getClassName(), pk->getName());
+        //const auto& appmsg = pk->peekDataAt<ApplicationDroneImage>(B(0), B(pk->getByteLength()));
+        //if (!appmsg)
+        //    throw cRuntimeError("Message (%s)%s is not a ApplicationDroneImage", pk->getClassName(), pk->getName());
 
-        EV_INFO << "Received Image: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+        //EV_INFO << "Received Image: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
+
+        int droneAppAddr;
+        double xD, yD;
+
+        //std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received a fragment " << pk->getName() << endl << std::flush;
+
+        sscanf(pk->getName(), "UDPBasicAppDroneImage-%d-%lf-%lf", &droneAppAddr, &xD, &yD);
 
         std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an image" << endl << std::flush;
 
         //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
-        checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
+        //checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());
+        checkReceivedImage(droneAppAddr, Coord(xD, yD));
 
     }
     catch(const cRuntimeError& e) {
@@ -1235,7 +1298,8 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
                     }
                 }
             }
-            else if (((simTime() - lastBestDetectValue) > limitFocusOffset) || (bestDetectValue > detectThreshold)) {
+            //else if (((simTime() - lastBestDetectValue) > limitFocusOffset) || (bestDetectValue > detectThreshold)) {
+            else if (((simTime() - lastBestDetectValue) > limitFocusOffset) && (bestDetectValue > detectThreshold)) {
                 jstate = JIOT_ALARM;
                 startFinalAlarmPublishing();
             }
@@ -1310,7 +1374,7 @@ void UdpBasicAppJolie::sendPolicyFocus(int droneID, Coord dronePosition) {
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "focus");
 
-    if (isStimulus) {
+    if ((isStimulus) || (isAOB)) {
         if (droneMap.count(droneID) != 0) {
             if (droneMap[droneID].activeAction == A_IMAGE) {
                 isThisDetect = false;
@@ -1370,7 +1434,7 @@ void UdpBasicAppJolie::sendPolicyStop(int droneID, Coord dronePosition) {
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "stop");
 
-    if (isStimulus) {
+    if ((isStimulus) || (isAOB)) {
         if (droneMap.count(droneID) != 0) {
             if (droneMap[droneID].activeAction == A_IMAGE) {
                 isThisDetect = false;
@@ -1430,7 +1494,7 @@ void UdpBasicAppJolie::sendPolicyCover(int droneID) {
     p.drone_id = droneID;
     snprintf(p.p_name, sizeof(p.p_name), "cover");
 
-    if (isStimulus) {
+    if ((isStimulus) || (isAOB)) {
         if (droneMap.count(droneID) != 0) {
             if (droneMap[droneID].activeAction == A_IMAGE) {
                 isThisDetect = false;
@@ -1566,19 +1630,30 @@ void UdpBasicAppJolie::msg1sec_call(void) {
 }
 
 void UdpBasicAppJolie::msg5sec_call(void) {
-    if (isStimulus) {
-        double sum_d2i, sum_i2d, count_d2i, count_i2d;
+    if ((isStimulus) || (isAOB)) {
+        //double sum_d2i, sum_i2d, count_d2i, count_i2d;
         double avgPDR = calculatePDR_allUAV();
 
-        sum_d2i = sum_i2d = count_d2i = count_i2d = 0;
+        /*sum_d2i = sum_i2d = count_d2i = count_i2d = 0;
 
         //use the stimulus to update the behavior
         for (auto& d : droneMap) {
             drone_info_t *di = &(d.second);
+
+            //checkChangeRule(d.first);
+
             double dronePDR = calculatePDR_singleUAV(d.first);
 
             if (di->activeAction == A_DETECT) {
-                double respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+                double respD2I = 0; //pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+
+                if (isStimulus) {
+                    respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+                }
+                else if (isAOB) {
+                    //respD2I = (dronePDR)^(1/avgPDR);
+                    respD2I = pow(dronePDR, (1.0 / avgPDR));
+                }
 
                 sum_d2i += respD2I;
                 ++count_d2i;
@@ -1594,7 +1669,15 @@ void UdpBasicAppJolie::msg5sec_call(void) {
                 }
             }
             else if (di->activeAction == A_IMAGE) {
-                double respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+                double respI2D = 0; //pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+
+                if (isStimulus) {
+                    respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+                }
+                else if (isAOB) {
+                    //respI2D = 1 - ((dronePDR)^(1/avgPDR));
+                    respI2D = 1.0 - pow(dronePDR, (1.0 / avgPDR));
+                }
 
                 sum_i2d += respI2D;
                 ++count_i2d;
@@ -1610,15 +1693,75 @@ void UdpBasicAppJolie::msg5sec_call(void) {
                     send_policy_to_drone(&pnew);
                 }
             }
-        }
+        }*/
 
-        if (count_d2i > 0) {
-            detect2imageRis.record(sum_d2i / count_d2i);
-        }
-        if (count_i2d > 0) {
-            image2detectRis.record(sum_i2d / count_i2d);
-        }
+        //if (count_d2i > 0) {
+        //    detect2imageRis.record(sum_d2i / count_d2i);
+        //}
+        //if (count_i2d > 0) {
+        //    image2detectRis.record(sum_i2d / count_i2d);
+        //}
         avgPDR_vec.record(avgPDR);
+    }
+}
+
+void UdpBasicAppJolie::checkChangeRule(int droneID) {
+    if (isStimulus || isAOB) {
+        if (droneMap.count(droneID) != 0) {
+            drone_info_t *di = &droneMap[droneID];
+            double avgPDR = calculatePDR_allUAV();
+            double dronePDR = calculatePDR_singleUAV(droneID);
+
+            avgPDR_vec.record(avgPDR);
+
+            if (di->activeAction == A_DETECT) {
+                double respD2I = 0; //pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+
+                if (isStimulus) {
+                    respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+                }
+                else if (isAOB) {
+                    //respD2I = (dronePDR)^(1/avgPDR);
+                    respD2I = pow(dronePDR, (1.0 / avgPDR));
+                }
+
+                detect2imageRis.record(respD2I);
+
+                if (dblrand() < respD2I) {
+                    di->activeAction = A_IMAGE;
+
+                    policy pnew = di->lastSentPolicy;
+                    pnew.a_id = A_IMAGE;
+                    snprintf(pnew.a_name, sizeof(pnew.a_name), "image");
+
+                    send_policy_to_drone(&pnew);
+                }
+            }
+            else if (di->activeAction == A_IMAGE) {
+                double respI2D = 0; //pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+
+                if (isStimulus) {
+                    respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+                }
+                else if (isAOB) {
+                    //respI2D = 1 - ((dronePDR)^(1/avgPDR));
+                    respI2D = 1.0 - pow(dronePDR, (1.0 / avgPDR));
+                }
+
+                image2detectRis.record(respI2D);
+
+                if (dblrand() < respI2D) {
+                    di->activeAction = A_DETECT;
+
+                    policy pnew = di->lastSentPolicy;
+                    pnew.a_id = A_DETECT;
+                    snprintf(pnew.a_class, sizeof(pnew.a_class), "car-crash");
+                    snprintf(pnew.a_name, sizeof(pnew.a_name), "detect");
+
+                    send_policy_to_drone(&pnew);
+                }
+            }
+        }
     }
 }
 

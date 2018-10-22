@@ -18,7 +18,7 @@
       <items xsi:type="scave:BarChart" name="Percentage Solutions"/>
     </datasets>
     <datasets name="DetectRatio">
-      <items xsi:type="scave:Add" filterPattern="DetectRatio AND itervar:PT(STIMULUS) " type="VECTOR"/>
+      <items xsi:type="scave:Add" filterPattern="DetectRatio AND (itervar:PT(STIMULUS) OR itervar:PT(AOB) )" type="VECTOR"/>
       <items xsi:type="scave:Apply" operation="timewinavg">
         <params name="windowSize" value="3"/>
       </items>
@@ -30,6 +30,9 @@
     </datasets>
     <datasets name="detect2image Probability">
       <items xsi:type="scave:Add" filterPattern="detect2imageRis" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="timewinavg">
+        <params name="windowSize" value="3"/>
+      </items>
       <items xsi:type="scave:Apply" operation="aggregator">
         <params name="function" value="average"/>
         <groupBy>measurement</groupBy>
@@ -38,6 +41,9 @@
     </datasets>
     <datasets name="avgPDR">
       <items xsi:type="scave:Add" filterPattern="avgPDR" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="timewinavg">
+        <params name="windowSize" value="3"/>
+      </items>
       <items xsi:type="scave:Apply" operation="aggregator">
         <params name="function" value="average"/>
         <groupBy>measurement</groupBy>
@@ -50,6 +56,9 @@
     </datasets>
     <datasets name="image2detect probability">
       <items xsi:type="scave:Add" filterPattern="image2detectRis" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="timewinavg">
+        <params name="windowSize" value="3"/>
+      </items>
       <items xsi:type="scave:Apply" operation="aggregator">
         <params name="function" value="average"/>
         <groupBy>measurement</groupBy>
@@ -58,6 +67,6 @@
     </datasets>
   </datasets>
   <chartSheets>
-    <chartSheets name="default" charts="//@datasets/@datasets.0/@items.1 //@datasets/@datasets.1/@items.1 //@datasets/@datasets.2/@items.1 //@datasets/@datasets.3/@items.3 //@datasets/@datasets.4/@items.2 //@datasets/@datasets.5/@items.2 //@datasets/@datasets.6/@items.1 //@datasets/@datasets.7/@items.2"/>
+    <chartSheets name="default" charts="//@datasets/@datasets.0/@items.1 //@datasets/@datasets.1/@items.1 //@datasets/@datasets.2/@items.1 //@datasets/@datasets.3/@items.3 //@datasets/@datasets.4/@items.3 //@datasets/@datasets.5/@items.3 //@datasets/@datasets.6/@items.1 //@datasets/@datasets.7/@items.3"/>
   </chartSheets>
 </scave:Analysis>

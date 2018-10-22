@@ -85,6 +85,7 @@ void UdpBasicAppDrone::initialize(int stage)
 
         first_policy_received = -1;
         imageId2send = 0;
+        uniqueIDmsg = 0;
 
         actual_spring_stiffness = 1;
         actual_spring_distance = 80;
@@ -855,7 +856,7 @@ void UdpBasicAppDrone::energyUAV_update(void) {
 
 void UdpBasicAppDrone::alertUAV_send(double acc, const char *classe) {
     char msgName[64];
-    sprintf(msgName, "UDPBasicAppDroneAlert-%d", myAppAddr);
+    sprintf(msgName, "UDPBasicAppDroneAlert-%d-%d", myAppAddr, uniqueIDmsg);
 
     long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + (2.0 * sizeof(double));
 
@@ -880,7 +881,9 @@ void UdpBasicAppDrone::alertUAV_send(double acc, const char *classe) {
             << " - Class: " << classe << " - Accuracy: " << acc
             << endl << std::flush;
 
+    //publicPacketSent[uniqueIDmsg] = simTime();
     publicPacketSent[packet->getId()] = simTime();
+    ++uniqueIDmsg;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);
@@ -890,7 +893,7 @@ void UdpBasicAppDrone::imageUAV_send(void) {
     //char msgName[64];
     //sprintf(msgName, "UDPBasicAppDroneImage-%d", myAppAddr);
     char msgName[128];
-    sprintf(msgName, "UDPBasicAppDroneImage-%d-%lf-%lf", myAppAddr, mob->getCurrentPosition().x, mob->getCurrentPosition().y);
+    sprintf(msgName, "UDPBasicAppDroneImage-%d-%d-%lf-%lf", myAppAddr, uniqueIDmsg, mob->getCurrentPosition().x, mob->getCurrentPosition().y);
 
     long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + uavImageSize;
     //long msgByteLength = sizeof(uint32_t) + sizeof(uint32_t) + 4;
@@ -911,7 +914,9 @@ void UdpBasicAppDrone::imageUAV_send(void) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image: " << mob->getCurrentPosition() << endl << std::flush;
 
+    //publicPacketSent[uniqueIDmsg] = simTime();
     publicPacketSent[packet->getId()] = simTime();
+    ++uniqueIDmsg;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
     socket.sendTo(packet, destAddr, destPort);

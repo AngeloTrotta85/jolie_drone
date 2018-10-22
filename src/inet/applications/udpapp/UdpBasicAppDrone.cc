@@ -881,8 +881,8 @@ void UdpBasicAppDrone::alertUAV_send(double acc, const char *classe) {
             << " - Class: " << classe << " - Accuracy: " << acc
             << endl << std::flush;
 
-    //publicPacketSent[uniqueIDmsg] = simTime();
-    publicPacketSent[packet->getId()] = simTime();
+    publicPacketSent[uniqueIDmsg] = simTime();
+    //publicPacketSent[packet->getId()] = simTime();
     ++uniqueIDmsg;
 
     L3Address destAddr = L3Address(gatewayIpAddress);
@@ -914,8 +914,8 @@ void UdpBasicAppDrone::imageUAV_send(void) {
 
     std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[UAV] Sending the image: " << mob->getCurrentPosition() << endl << std::flush;
 
-    //publicPacketSent[uniqueIDmsg] = simTime();
-    publicPacketSent[packet->getId()] = simTime();
+    publicPacketSent[uniqueIDmsg] = simTime();
+    //publicPacketSent[packet->getId()] = simTime();
     ++uniqueIDmsg;
 
     L3Address destAddr = L3Address(gatewayIpAddress);

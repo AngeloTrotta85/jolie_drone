@@ -1127,10 +1127,14 @@ void UdpBasicAppJolie::manageNewAlert_local(Packet *pk) {
 
         EV_INFO << "Received Alert: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
 
+        int droneAppAddr, uID;
+
+        sscanf(pk->getName(), "UDPBasicAppDroneAlert-%d-%d", &droneAppAddr, &uID);
+
         if (receivedPktMap.count(appmsg->getDrone_appAddr()) == 0) {
             receivedPktMap[appmsg->getDrone_appAddr()] = std::map<long int, simtime_t>();
         }
-        receivedPktMap[appmsg->getDrone_appAddr()][pk->getId()] == simTime();
+        receivedPktMap[appmsg->getDrone_appAddr()][uID] = simTime();
 
         std::cout << simTime() << " - (" << myAppAddr << "|" << myIPAddr << ")[GWY] Received an alert" << endl << std::flush;
 
@@ -1165,7 +1169,7 @@ void UdpBasicAppJolie::manageNewImage_local(Packet *pk) {
         if (receivedPktMap.count(droneAppAddr) == 0) {
             receivedPktMap[droneAppAddr] = std::map<long int, simtime_t>();
         }
-        receivedPktMap[droneAppAddr][pk->getId()] == simTime();
+        receivedPktMap[droneAppAddr][uID] = simTime();
 
         //sendImageSingleUAV_CoAP(appmsg->getDrone_appAddr(), appmsg->getPosition().x, appmsg->getPosition().y);
         //checkReceivedImage(appmsg->getDrone_appAddr(), appmsg->getPosition());

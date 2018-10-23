@@ -364,8 +364,11 @@ protected:
 
     cOutVector detectRatio;
     cOutVector detect2imageRis;
+    cOutVector detect2imageRis_bkp;
     cOutVector image2detectRis;
+    cOutVector image2detectRis_bkp;
     cOutVector avgPDR_vec;
+    cOutVector avgPDR_vec_bkp;
 
 public:
     //thread variables
@@ -398,6 +401,8 @@ protected:
     void msg1sec_call(void);
     void msg5sec_call(void);
 
+    double calculateI2D(int droneID, double avgPDR);
+    double calculateD2I(int droneID, double avgPDR);
     void checkChangeRule(int droneID);
 
     virtual void manageReceivedBeacon(Packet *msg);

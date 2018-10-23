@@ -198,8 +198,11 @@ void UdpBasicAppJolie::initialize(int stage)
 
         detectRatio.setName("DetectRatio");
         detect2imageRis.setName("detect2imageRis");
+        detect2imageRis_bkp.setName("detect2imageRis_bkp");
         image2detectRis.setName("image2detectRis");
+        image2detectRis_bkp.setName("image2detectRis_bkp");
         avgPDR_vec.setName("avgPDR");
+        avgPDR_vec_bkp.setName("avgPDR_bkp");
     }
     else if (stage == INITSTAGE_LAST) {
         int droneNumber = this->getParentModule()->getParentModule()->getSubmodule("host", 0)->getVectorSize();
@@ -1313,7 +1316,8 @@ void UdpBasicAppJolie::startFocus(int droneID, Coord dronePosition, double detec
                 }
             }
             //else if (((simTime() - lastBestDetectValue) > limitFocusOffset) || (bestDetectValue > detectThreshold)) {
-            else if (((simTime() - lastBestDetectValue) > limitFocusOffset) && (bestDetectValue > detectThreshold)) {
+            //else
+            if (((simTime() - lastBestDetectValue) > limitFocusOffset) && (bestDetectValue > detectThreshold)) {
                 jstate = JIOT_ALARM;
                 startFinalAlarmPublishing();
             }
@@ -1644,9 +1648,40 @@ void UdpBasicAppJolie::msg1sec_call(void) {
 }
 
 void UdpBasicAppJolie::msg5sec_call(void) {
-    if ((isStimulus) || (isAOB)) {
+
+    double avgPDR = calculatePDR_allUAV();
+    avgPDR_vec_bkp.record(avgPDR);
+
+    double sumD2I = 0;
+    double countD2I = 0;
+    double sumI2D = 0;
+    double countI2D = 0;
+
+    for (auto& dd : droneMap) {
+        double tmp;
+
+        tmp = calculateD2I(dd.first, avgPDR);
+        if (tmp >= 0){
+            sumD2I += tmp;
+            ++countD2I;
+        }
+
+        tmp = calculateI2D(dd.first, avgPDR);
+        if (tmp >= 0){
+            sumI2D += tmp;
+            ++countI2D;
+        }
+    }
+    if (countD2I > 0) {
+        detect2imageRis_bkp.record(sumD2I/countD2I);
+    }
+    if (countI2D > 0) {
+        image2detectRis_bkp.record(sumI2D/countI2D);
+    }
+
+    //if ((isStimulus) || (isAOB)) {
         //double sum_d2i, sum_i2d, count_d2i, count_i2d;
-        double avgPDR = calculatePDR_allUAV();
+        //double avgPDR = calculatePDR_allUAV();
 
         /*sum_d2i = sum_i2d = count_d2i = count_i2d = 0;
 
@@ -1715,8 +1750,42 @@ void UdpBasicAppJolie::msg5sec_call(void) {
         //if (count_i2d > 0) {
         //    image2detectRis.record(sum_i2d / count_i2d);
         //}
-        avgPDR_vec.record(avgPDR);
+        //avgPDR_vec.record(avgPDR);
+    //}
+}
+
+double UdpBasicAppJolie::calculateD2I(int droneID, double avgPDR) {
+    double ris = -1;
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *di = &droneMap[droneID];
+        double dronePDR = calculatePDR_singleUAV(droneID);
+
+        if (isStimulus) {
+            ris = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+        }
+        else if (isAOB) {
+            //respD2I = (dronePDR)^(1/avgPDR);
+            ris = pow(dronePDR, (1.0 / avgPDR));
+        }
     }
+    return ris;
+}
+
+double UdpBasicAppJolie::calculateI2D(int droneID, double avgPDR) {
+    double ris = -1;
+    if (droneMap.count(droneID) != 0) {
+        drone_info_t *di = &droneMap[droneID];
+        double dronePDR = calculatePDR_singleUAV(droneID);
+
+        if (isStimulus) {
+            ris = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+        }
+        else if (isAOB) {
+            //respI2D = 1 - ((dronePDR)^(1/avgPDR));
+            ris = 1.0 - pow(dronePDR, (1.0 / avgPDR));
+        }
+    }
+    return ris;
 }
 
 void UdpBasicAppJolie::checkChangeRule(int droneID) {
@@ -1724,20 +1793,21 @@ void UdpBasicAppJolie::checkChangeRule(int droneID) {
         if (droneMap.count(droneID) != 0) {
             drone_info_t *di = &droneMap[droneID];
             double avgPDR = calculatePDR_allUAV();
-            double dronePDR = calculatePDR_singleUAV(droneID);
+            //double dronePDR = calculatePDR_singleUAV(droneID);
 
             avgPDR_vec.record(avgPDR);
 
             if (di->activeAction == A_DETECT) {
-                double respD2I = 0; //pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
-
-                if (isStimulus) {
-                    respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
-                }
-                else if (isAOB) {
-                    //respD2I = (dronePDR)^(1/avgPDR);
-                    respD2I = pow(dronePDR, (1.0 / avgPDR));
-                }
+                double respD2I = calculateD2I(droneID, avgPDR);
+                //double respD2I = 0; //pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+                //
+                //if (isStimulus) {
+                //    respD2I = pow(avgPDR, 2.0) / (pow(avgPDR, 2.0) + pow(1.0 - dronePDR, 2.0));
+                //}
+                //else if (isAOB) {
+                //    //respD2I = (dronePDR)^(1/avgPDR);
+                //    respD2I = pow(dronePDR, (1.0 / avgPDR));
+                //}
 
                 detect2imageRis.record(respD2I);
 
@@ -1752,15 +1822,16 @@ void UdpBasicAppJolie::checkChangeRule(int droneID) {
                 }
             }
             else if (di->activeAction == A_IMAGE) {
-                double respI2D = 0; //pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
-
-                if (isStimulus) {
-                    respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
-                }
-                else if (isAOB) {
-                    //respI2D = 1 - ((dronePDR)^(1/avgPDR));
-                    respI2D = 1.0 - pow(dronePDR, (1.0 / avgPDR));
-                }
+                double respI2D = calculateI2D(droneID, avgPDR);
+                //double respI2D = 0; //pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+                //
+                //if (isStimulus) {
+                //    respI2D = pow(1.0 - avgPDR, 2.0) / (pow(1.0 - avgPDR, 2.0) + pow(dronePDR, 2.0));
+                //}
+                //else if (isAOB) {
+                //    //respI2D = 1 - ((dronePDR)^(1/avgPDR));
+                //    respI2D = 1.0 - pow(dronePDR, (1.0 / avgPDR));
+                //}
 
                 image2detectRis.record(respI2D);
 

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <scave:Analysis xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:scave="http://www.omnetpp.org/omnetpp/scave">
   <inputs>
-    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll4/*.vec"/>
-    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll4/*.sca"/>
+    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll/*.vec"/>
+    <inputs name="/jolie_drone/simulations/jolie/resultsBL/TestOkAll/*.sca"/>
   </inputs>
   <datasets>
     <datasets name="Delay">
@@ -68,8 +68,32 @@
       </items>
       <items xsi:type="scave:LineChart" name="image2detect" lineNameFormat=""/>
     </datasets>
+    <datasets name="avgPDR-all">
+      <items xsi:type="scave:Add" filterPattern="avgPDR_bkp" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="avgPDR-all" lineNameFormat=""/>
+    </datasets>
+    <datasets name="I2D-all">
+      <items xsi:type="scave:Add" filterPattern="image2detectRis_bkp" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="I2D-all" lineNameFormat=""/>
+    </datasets>
+    <datasets name="D2I-all">
+      <items xsi:type="scave:Add" filterPattern="detect2imageRis_bkp" type="VECTOR"/>
+      <items xsi:type="scave:Apply" operation="aggregator">
+        <params name="function" value="average"/>
+        <groupBy>measurement</groupBy>
+      </items>
+      <items xsi:type="scave:LineChart" name="D2I-all" lineNameFormat=""/>
+    </datasets>
   </datasets>
   <chartSheets>
-    <chartSheets name="default" charts="//@datasets/@datasets.0/@items.1 //@datasets/@datasets.1/@items.1 //@datasets/@datasets.2/@items.1 //@datasets/@datasets.3/@items.3 //@datasets/@datasets.4/@items.3 //@datasets/@datasets.5/@items.3 //@datasets/@datasets.6/@items.1 //@datasets/@datasets.7/@items.4"/>
+    <chartSheets name="default" charts="//@datasets/@datasets.0/@items.1 //@datasets/@datasets.1/@items.1 //@datasets/@datasets.2/@items.1 //@datasets/@datasets.3/@items.3 //@datasets/@datasets.4/@items.3 //@datasets/@datasets.5/@items.3 //@datasets/@datasets.6/@items.1 //@datasets/@datasets.7/@items.4 //@datasets/@datasets.8/@items.2 //@datasets/@datasets.9/@items.2 //@datasets/@datasets.10/@items.2"/>
   </chartSheets>
 </scave:Analysis>
